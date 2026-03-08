@@ -62,6 +62,7 @@
     .areaToggle{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:0;font-size:16px}
     .areaBody{display:block}
     .area h3{margin:0;font-size:16px}
+    .area h3.toggleable{cursor:pointer}
     .chip{font-size:12px;color:var(--muted)}
     .itemRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto;gap:8px;align-items:center;margin:7px 0}
     .sliderWrap{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
@@ -382,7 +383,7 @@
       card.innerHTML = `<div class="areaHead">
           <div class="areaTitleWrap">
             <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
-            <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
           </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
@@ -479,6 +480,15 @@
         persist();
         renderEditor();
       };
+
+      const areaTitle = card.querySelector('h3[data-role="name"]');
+      if(areaTitle && !isEditMode){
+        areaTitle.onclick = () => {
+          state.settings.collapsed[collapseKey] = !isCollapsed;
+          persist();
+          renderEditor();
+        };
+      }
 
       const areaColorInput = card.querySelector('[data-action="areaColor"]');
       if(areaColorInput){
