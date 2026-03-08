@@ -184,7 +184,7 @@
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
   const CURRENT_GRADIENT = ['#8b5cf6', '#22c55e'];
-  const DEFAULT_AREA_COMPARISON_COLOR = '#ffd27b';
+  const DEFAULT_AREA_COMPARISON_COLOR = '#ffffff';
   const DEFAULT_CHART_SIZE = 780;
   const DEFAULT_CHART_WIDTH = 780;
   const DEFAULT_CHART_HEIGHT = 780;
@@ -768,7 +768,7 @@
       const labelRadius = radius + 36;
       const lx = cx + Math.cos(a)*labelRadius;
       const ly = cy + Math.sin(a)*labelRadius;
-      ctx.fillStyle = cur.areas[i].comparisonColor || 'rgba(232,236,242,.95)';
+      ctx.fillStyle = cur.areas[i].comparisonColor || DEFAULT_AREA_COMPARISON_COLOR;
       ctx.font = '15px system-ui';
       const label = `${String(i+1).padStart(2,'0')} ${cur.areas[i].name}`;
       const m = ctx.measureText(label);
@@ -796,7 +796,7 @@
       if(typeof ctx.createConicGradient === 'function'){
         const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
         if(!colors.length){
-          const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+          const fallback = alpha ? `rgba(255,255,255,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
           gradient.addColorStop(0, fallback);
           gradient.addColorStop(1, fallback);
           return gradient;
@@ -813,7 +813,7 @@
 
       const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
       if(!colors.length){
-        const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+        const fallback = alpha ? `rgba(255,255,255,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
         fallbackGradient.addColorStop(0, fallback);
         fallbackGradient.addColorStop(1, fallback);
         return fallbackGradient;
