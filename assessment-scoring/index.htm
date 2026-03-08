@@ -83,6 +83,8 @@
       <div class="toolbar panel">
         <button id="newAssessment" class="btnPrimary">+ Nové hodnocení</button>
         <button id="duplicateAssessment">Duplikovat strukturu</button>
+        <button id="deleteAssessment" class="btnDanger">Smazat průchod</button>
+        <button id="resetValues">Reset hodnot</button>
         <button id="exportBtn">Export JSON</button>
         <label for="importFile" class="small">Import</label>
         <input id="importFile" type="file" accept="application/json" />
@@ -124,7 +126,15 @@
         </div>
 
         <div class="grid" id="areasGrid"></div>
-        <div class="footer">Tip: Pokud chceš méně nebo více oblastí (6-10), uprav názvy v sekci níže nebo přes export JSON.</div>
+        <section class="panel" style="margin-top:12px">
+          <h3 style="margin:0 0 8px">Správa oblastí (6-10 doporučeno)</h3>
+          <p class="small" style="margin:0 0 8px">Můžeš upravovat názvy i texty přímo v kartách výše. Tady můžeš rychle přidat nebo odebrat celé oblasti.</p>
+          <div class="toolbar">
+            <button id="addArea">+ Přidat oblast</button>
+            <button id="removeLastArea">Odebrat poslední oblast</button>
+          </div>
+        </section>
+        <div class="footer">Tip: Ideální je mít 6-10 oblastí. Každou můžeš přejmenovat i průběžně upravovat podle svého.</div>
       </section>
     </div>
   </div>
@@ -193,9 +203,13 @@
     nextReviewDate: document.getElementById('nextReviewDate'),
     newAssessment: document.getElementById('newAssessment'),
     duplicateAssessment: document.getElementById('duplicateAssessment'),
+    deleteAssessment: document.getElementById('deleteAssessment'),
+    resetValues: document.getElementById('resetValues'),
     plusQuarter: document.getElementById('plusQuarter'),
     exportBtn: document.getElementById('exportBtn'),
-    importFile: document.getElementById('importFile')
+    importFile: document.getElementById('importFile'),
+    addArea: document.getElementById('addArea'),
+    removeLastArea: document.getElementById('removeLastArea')
   };
 
   let state = loadState();
@@ -292,7 +306,10 @@
           const v = num.value === '' ? null : Math.min(10, Math.max(1, Number(num.value)));
           cur.areas[areaIdx].items[itemIdx].value = Number.isFinite(v) ? v : null;
           persist();
-          render();
+          updateAreaScore(areaIdx);
+          renderTargets();
+          renderChart();
+          renderHistory();
         };
         card.appendChild(row);
       });
@@ -327,6 +344,14 @@
     els.title.oninput = ()=>{ cur.title = els.title.value; persist(); renderHistory(); };
     els.date.oninput = ()=>{ cur.date = els.date.value; persist(); renderHistory(); renderChart(); };
     els.nextReviewDate.oninput = ()=>{ cur.nextReviewDate = els.nextReviewDate.value; persist(); renderHistory(); };
+  }
+
+  function updateAreaScore(areaIdx){
+    const cur = selected();
+    const card = els.areasGrid.children[areaIdx];
+    if(!card) return;
+    const scoreEl = card.querySelector('.chip strong');
+    if(scoreEl) scoreEl.textContent = String(calcAreaScore(cur.areas[areaIdx]));
   }
 
   function renderTargets(){
@@ -493,9 +518,59 @@
     render();
   };
 
+  els.deleteAssessment.onclick = () => {
+    if(state.assessments.length === 1){
+      alert('Musí zůstat alespoň jeden průchod.');
+      return;
+    }
+    const cur = selected();
+    if(!confirm(`Opravdu smazat průchod "${cur.title || 'Bez názvu'}"?`)) return;
+    state.assessments = state.assessments.filter(a => a.id !== cur.id);
+    state.selectedId = state.assessments[0].id;
+    persist();
+    render();
+  };
+
+  els.resetValues.onclick = () => {
+    const cur = selected();
+    if(!confirm('Vynulovat všechny vyplněné hodnoty v aktuálním průchodu?')) return;
+    cur.areas.forEach(area => area.items.forEach(item => { item.value = null; }));
+    persist();
+    render();
+  };
+
   els.plusQuarter.onclick = () => {
     const cur = selected();
     cur.nextReviewDate = addMonths(cur.date || todayISO(), 3);
+    persist();
+    render();
+  };
+
+  els.addArea.onclick = () => {
+    const cur = selected();
+    const nextNum = cur.areas.length + 1;
+    cur.areas.push({
+      name: `New Area ${nextNum}`,
+      items: [
+        { text:'Nová položka 1', value:null },
+        { text:'Nová položka 2', value:null },
+        { text:'Nová položka 3', value:null },
+        { text:'Nová položka 4', value:null }
+      ],
+      target: 8
+    });
+    persist();
+    render();
+  };
+
+  els.removeLastArea.onclick = () => {
+    const cur = selected();
+    if(cur.areas.length <= 1){
+      alert('Musí zůstat alespoň jedna oblast.');
+      return;
+    }
+    if(!confirm('Odebrat poslední oblast v aktuálním průchodu?')) return;
+    cur.areas.pop();
     persist();
     render();
   };
