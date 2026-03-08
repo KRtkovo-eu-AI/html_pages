@@ -430,7 +430,7 @@
       body.appendChild(meta);
 
       card.querySelector('[data-action="toggleArea"]').onclick = () => {
-        state.settings.collapsed[collapseKey] = !state.settings.collapsed[collapseKey];
+        state.settings.collapsed[collapseKey] = !isCollapsed;
         persist();
         renderEditor();
       };
