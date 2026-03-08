@@ -91,6 +91,10 @@
     .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
     .targets table{width:100%;border-collapse:collapse;font-size:13px}
     .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+    .targets th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:inherit}
+    .targets th button:hover{color:var(--accent)}
+    .sortIndicator{font-size:11px;color:var(--muted);min-width:10px;text-align:center}
+    .sortIndicator.active{color:var(--accent)}
     .footer{margin-top:12px;font-size:12px;color:var(--muted)}
   </style>
 </head>
@@ -147,9 +151,17 @@
           </div>
           <div class="targets panel" style="padding:10px">
             <h3 style="margin:0 0 8px">Priorities & targets</h3>
-            <p class="small" style="margin-top:0">Automatically sorted from lowest-scoring areas. Set your target score for the next assessment or end-of-year checkpoint.</p>
+            <p class="small" style="margin-top:0">Click a table header to sort priorities by that column. Set your target score for the next assessment or end-of-year checkpoint.</p>
             <table>
-              <thead><tr><th>#</th><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
+              <thead>
+                <tr>
+                  <th><button type="button" data-sort-col="order"># <span class="sortIndicator" data-sort-indicator="order">↕</span></button></th>
+                  <th><button type="button" data-sort-col="name">Area <span class="sortIndicator" data-sort-indicator="name">↕</span></button></th>
+                  <th><button type="button" data-sort-col="score">Score <span class="sortIndicator" data-sort-indicator="score">↕</span></button></th>
+                  <th><button type="button" data-sort-col="target">Target <span class="sortIndicator" data-sort-indicator="target">↕</span></button></th>
+                  <th><button type="button" data-sort-col="gap">Gap <span class="sortIndicator" data-sort-indicator="gap">↕</span></button></th>
+                </tr>
+              </thead>
               <tbody id="targetsBody"></tbody>
             </table>
           </div>
@@ -172,7 +184,7 @@
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
   const CURRENT_GRADIENT = ['#8b5cf6', '#22c55e'];
-  const DEFAULT_AREA_COMPARISON_COLOR = '#ffd27b';
+  const DEFAULT_AREA_COMPARISON_COLOR = '#ffffff';
   const DEFAULT_CHART_SIZE = 780;
   const DEFAULT_CHART_WIDTH = 780;
   const DEFAULT_CHART_HEIGHT = 780;
@@ -312,25 +324,28 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
       if(typeof parsed.settings.showComparison !== 'boolean') parsed.settings.showComparison = true;
       if(typeof parsed.settings.comparisonRunId !== 'string') parsed.settings.comparisonRunId = '';
+      if(!parsed.settings.targetsSort || typeof parsed.settings.targetsSort !== 'object') parsed.settings.targetsSort = { key: 'score', direction: 'asc' };
+      if(!['order','name','score','target','gap'].includes(parsed.settings.targetsSort.key)) parsed.settings.targetsSort.key = 'score';
+      if(!['asc','desc'].includes(parsed.settings.targetsSort.direction)) parsed.settings.targetsSort.direction = 'asc';
       parsed.assessments.forEach(a => a.areas?.forEach(area => {
         if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
       }));
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
     }
   }
 
@@ -437,7 +452,7 @@
       card.innerHTML = `<div class="areaHead">
           <div class="areaTitleWrap">
             <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
-            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}" style="color:${area.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR}">${escapeHtml(area.name)}</h3>
           </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
@@ -548,8 +563,10 @@
       if(areaColorInput){
         areaColorInput.oninput = () => {
           area.comparisonColor = areaColorInput.value || DEFAULT_AREA_COMPARISON_COLOR;
+          if(areaTitle) areaTitle.style.color = area.comparisonColor;
           persist();
           updateColorUI();
+          renderTargets();
           renderChart();
         };
       }
@@ -625,20 +642,54 @@
 
   function renderTargets(){
     const cur = selected();
+    const sortState = state.settings.targetsSort || { key: 'score', direction: 'asc' };
+    const sortMultiplier = sortState.direction === 'desc' ? -1 : 1;
     const rows = cur.areas.map((a, idx) => {
       const score = calcAreaScore(a);
       const target = Number(a.target || 0);
-      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1) };
-    }).sort((a,b)=>a.score-b.score);
+      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1), index: idx, color: a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR };
+    }).sort((a,b)=>{
+      const key = sortState.key;
+      let compare = 0;
+      if(key === 'name') compare = a.name.localeCompare(b.name);
+      else compare = Number(a[key]) - Number(b[key]);
+      if(compare === 0) compare = a.index - b.index;
+      return compare * sortMultiplier;
+    });
+
+    document.querySelectorAll('[data-sort-indicator]').forEach(indicator => {
+      const key = indicator.getAttribute('data-sort-indicator');
+      const isActive = key === sortState.key;
+      indicator.textContent = isActive ? (sortState.direction === 'asc' ? '▲' : '▼') : '↕';
+      indicator.classList.toggle('active', isActive);
+    });
 
     els.targetsBody.innerHTML = rows.map(r => `
-      <tr>
+      <tr style="color:${r.color}">
         <td>${String(r.order).padStart(2,'0')}</td>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.score}</td>
         <td>${r.target || '-'}</td>
         <td style="color:${r.gap>0?'var(--accent2)':(r.gap<0?'var(--ok)':'var(--muted)')}">${r.gap>0?'+':''}${r.gap || 0}</td>
       </tr>`).join('');
+  }
+
+  function initTargetSorting(){
+    document.querySelectorAll('[data-sort-col]').forEach(btn => {
+      btn.onclick = () => {
+        const key = btn.getAttribute('data-sort-col');
+        if(!key) return;
+        const sortState = state.settings.targetsSort || { key: 'score', direction: 'asc' };
+        if(sortState.key === key) sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+        else {
+          sortState.key = key;
+          sortState.direction = key === 'name' ? 'asc' : 'desc';
+        }
+        state.settings.targetsSort = sortState;
+        persist();
+        renderTargets();
+      };
+    });
   }
 
 
@@ -719,7 +770,7 @@
       const labelRadius = radius + 36;
       const lx = cx + Math.cos(a)*labelRadius;
       const ly = cy + Math.sin(a)*labelRadius;
-      ctx.fillStyle = 'rgba(232,236,242,.95)';
+      ctx.fillStyle = cur.areas[i].comparisonColor || DEFAULT_AREA_COMPARISON_COLOR;
       ctx.font = '15px system-ui';
       const label = `${String(i+1).padStart(2,'0')} ${cur.areas[i].name}`;
       const m = ctx.measureText(label);
@@ -737,43 +788,8 @@
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
       const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
-      const comparisonStroke = createAreaGradient(cur, cx, cy, radius);
-      const comparisonFill = createAreaGradient(cur, cx, cy, radius, 0.16);
-      drawDataset(comparisonValues, comparisonStroke, comparisonFill, false);
-    }
-
-    function createAreaGradient(run, x, y, r, alpha){
-      const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
-      if(typeof ctx.createConicGradient === 'function'){
-        const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
-        if(!colors.length){
-          const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
-          gradient.addColorStop(0, fallback);
-          gradient.addColorStop(1, fallback);
-          return gradient;
-        }
-        colors.forEach((color, idx) => {
-          const from = idx / colors.length;
-          const to = (idx + 1) / colors.length;
-          const c = alpha ? hexToRgba(color, alpha) : color;
-          gradient.addColorStop(from, c);
-          gradient.addColorStop(to, c);
-        });
-        return gradient;
-      }
-
-      const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-      if(!colors.length){
-        const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
-        fallbackGradient.addColorStop(0, fallback);
-        fallbackGradient.addColorStop(1, fallback);
-        return fallbackGradient;
-      }
-      colors.forEach((color, idx) => {
-        const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
-        fallbackGradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
-      });
-      return fallbackGradient;
+      const comparisonColors = cur.areas.map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+      drawComparisonDataset(comparisonValues, comparisonColors);
     }
 
     function hexToRgba(hex, alpha){
@@ -785,16 +801,64 @@
       return `rgba(${r},${g},${b},${alpha})`;
     }
 
-    function drawDataset(values, stroke, fill, points){
-      ctx.beginPath();
-      values.forEach((v,i) => {
+    function getPolygonPoints(values){
+      return values.map((v,i) => {
         const rr = radius * (Math.max(0, Math.min(10, v))/10);
         const a = -Math.PI/2 + i*(Math.PI*2/n);
-        const x = cx + Math.cos(a)*rr;
-        const y = cy + Math.sin(a)*rr;
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+        return { x: cx + Math.cos(a)*rr, y: cy + Math.sin(a)*rr, value: v };
       });
+    }
+
+    function tracePolygon(points){
+      ctx.beginPath();
+      points.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
       ctx.closePath();
+    }
+
+    function drawComparisonDataset(values, areaColors){
+      const points = getPolygonPoints(values);
+      ctx.save();
+      tracePolygon(points);
+      ctx.clip();
+      points.forEach((p, i) => {
+        const peakColor = areaColors[i] || DEFAULT_AREA_COMPARISON_COLOR;
+        const fadeDistance = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
+        const radial = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, fadeDistance);
+        radial.addColorStop(0, hexToRgba(peakColor, 0.42));
+        radial.addColorStop(1, hexToRgba(peakColor, 0));
+        ctx.fillStyle = radial;
+        ctx.fillRect(0, 0, W, H);
+      });
+      ctx.restore();
+      drawComparisonOutline(points, areaColors);
+    }
+
+    function drawComparisonOutline(points, areaColors){
+      if(!points.length) return;
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      for(let i=0;i<points.length;i++){
+        const from = points[i];
+        const to = points[(i+1) % points.length];
+        const fromColor = areaColors[i] || DEFAULT_AREA_COMPARISON_COLOR;
+        const toColor = areaColors[(i+1) % points.length] || DEFAULT_AREA_COMPARISON_COLOR;
+        const edgeGradient = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
+        edgeGradient.addColorStop(0, fromColor);
+        edgeGradient.addColorStop(1, toColor);
+        ctx.strokeStyle = edgeGradient;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawDataset(values, stroke, fill, points){
+      const datasetPoints = getPolygonPoints(values);
+      tracePolygon(datasetPoints);
       ctx.fillStyle = fill;
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 2;
@@ -802,22 +866,18 @@
       ctx.stroke();
 
       if(points){
-        values.forEach((v,i) => {
-          const rr = radius * (Math.max(0, Math.min(10, v))/10);
-          const a = -Math.PI/2 + i*(Math.PI*2/n);
-          const x = cx + Math.cos(a)*rr;
-          const y = cy + Math.sin(a)*rr;
+        datasetPoints.forEach((point) => {
           ctx.beginPath();
-          ctx.arc(x,y,11,0,Math.PI*2);
+          ctx.arc(point.x,point.y,11,0,Math.PI*2);
           ctx.fillStyle = '#0f1117';
           ctx.fill();
           ctx.strokeStyle = stroke;
           ctx.stroke();
           ctx.fillStyle = '#e8ecf2';
           ctx.font = '12px system-ui';
-          const txt = String(v || 0);
+          const txt = String(point.value || 0);
           const m = ctx.measureText(txt);
-          ctx.fillText(txt, x-m.width/2, y+4);
+          ctx.fillText(txt, point.x-m.width/2, point.y+4);
         });
       }
     }
@@ -840,12 +900,15 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(state.settings || {}) };
+        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
         if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
         if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
         if(typeof state.settings.showComparison !== 'boolean') state.settings.showComparison = true;
         if(typeof state.settings.comparisonRunId !== 'string') state.settings.comparisonRunId = '';
+        if(!state.settings.targetsSort || typeof state.settings.targetsSort !== 'object') state.settings.targetsSort = { key: 'score', direction: 'asc' };
+        if(!['order','name','score','target','gap'].includes(state.settings.targetsSort.key)) state.settings.targetsSort.key = 'score';
+        if(!['asc','desc'].includes(state.settings.targetsSort.direction)) state.settings.targetsSort.direction = 'asc';
         state.assessments.forEach(a => a.areas?.forEach(area => {
           if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
         }));
@@ -970,6 +1033,7 @@
   };
 
   initChartResizing();
+  initTargetSorting();
   render();
 })();
 </script>
