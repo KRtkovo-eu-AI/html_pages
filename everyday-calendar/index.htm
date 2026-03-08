@@ -1,0 +1,1674 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Everyday Calendar</title>
+  <link href="favicon.ico" rel="icon" />
+  <style>
+    :root{
+      --bg: #0b0d10;
+      --panel: #10141a;
+      --panel2:#0f1318;
+      --text:#e9edf2;
+      --muted:#aab3bf;
+      --line:#223042;
+      --shadow: 0 14px 40px rgba(0,0,0,.45);
+      --radius: 16px;
+      --cell: 22px;
+      --gap: 6px;
+      --focus: 0 0 0 3px rgba(130,180,255,.25);
+    }
+
+    *{ box-sizing: border-box; }
+    html,body{ min-height:100%; }
+
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background: none; /* background is moved to fixed ::before to avoid seams on scroll */
+    }
+
+    /* Fixed background layer (prevents ugly repeating/seams while scrolling) */
+    body::before{
+      content:"";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(1200px 800px at 20% 0%, #132033 0%, rgba(19,32,51,0) 50%),
+        radial-gradient(1000px 700px at 90% 10%, #1b1633 0%, rgba(27,22,51,0) 50%),
+        var(--bg);
+      background-repeat: no-repeat;
+      transform: translateZ(0);
+    }
+
+    .wrap{
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 18px 40px;
+    }
+
+    header{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      gap: 14px 18px;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap: 4px;
+      min-width: 280px;
+    }
+    .title h1{
+      margin:0;
+      font-size: 22px;
+      letter-spacing: .2px;
+      font-weight: 750;
+    }
+    .title .sub{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      max-width: 70ch;
+    }
+
+    .toolbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      overflow:hidden;
+    }
+
+    .tabs{
+      padding: 14px 14px 10px;
+      background: rgba(0,0,0,.18);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px;
+      align-items:center;
+      justify-content: space-between;
+    }
+
+    .tablist{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      align-items:center;
+      min-height: 38px;
+    }
+
+    .tab{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      color: var(--text);
+      cursor:pointer;
+      user-select:none;
+      transition: transform .06s ease, background .15s ease, border-color .15s ease;
+      font-size: 13px;
+    }
+    .tab:hover{ background: rgba(255,255,255,.06); }
+    .tab:active{ transform: translateY(1px); }
+
+    .tab[aria-selected="true"]{
+      border-color: rgba(255,255,255,.22);
+      background: rgba(255,255,255,.09);
+    }
+
+    .dot{
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.35);
+      flex: 0 0 auto;
+    }
+
+    .tabActions{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    button, .btn{
+      font: inherit;
+      color: var(--text);
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 9px 11px;
+      cursor:pointer;
+      transition: background .15s ease, border-color .15s ease, transform .06s ease;
+      user-select:none;
+      display:inline-flex;
+      gap: 8px;
+      align-items:center;
+      font-size: 13px;
+    }
+    button:hover{ background: rgba(255,255,255,.07); }
+    button:active{ transform: translateY(1px); }
+    button:focus-visible{ outline:none; box-shadow: var(--focus); }
+
+    .btnPrimary{
+      background: rgba(130,180,255,.12);
+      border-color: rgba(130,180,255,.25);
+    }
+    .btnDanger{
+      background: rgba(255,80,80,.10);
+      border-color: rgba(255,80,80,.22);
+    }
+
+    .content{
+      padding: 14px;
+    }
+
+    .topRow{
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap: 10px 14px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .stats{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px 14px;
+      align-items:center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .statStrong{ color: var(--text); font-weight: 650; }
+
+    .controls{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    select, input[type="text"], input[type="color"], textarea{
+      font: inherit;
+      color: var(--text);
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 9px 10px;
+      outline:none;
+      transition: box-shadow .15s ease, border-color .15s ease;
+      font-size: 13px;
+    }
+    select:focus, input[type="text"]:focus, textarea:focus{
+      box-shadow: var(--focus);
+      border-color: rgba(130,180,255,.35);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: repeat(2, minmax(240px, 1fr)); }
+    }
+    @media (max-width: 660px){
+      .grid{ grid-template-columns: 1fr; }
+      :root{ --cell: 20px; --gap: 6px; }
+    }
+
+    .month{
+      background: rgba(0,0,0,.18);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 14px;
+      padding: 12px 12px 10px;
+    }
+    .monthHeader{
+      display:flex;
+      align-items:baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .monthName{
+      margin:0;
+      font-weight: 750;
+      font-size: 14px;
+      letter-spacing: .2px;
+    }
+    .monthMeta{
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .days{
+      display:grid;
+      grid-template-columns: repeat(7, var(--cell));
+      gap: var(--gap);
+      align-items:center;
+      justify-content:flex-start;
+    }
+
+    .cell{
+      width: var(--cell);
+      height: var(--cell);
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.02);
+      cursor:pointer;
+      position:relative;
+      transition: transform .05s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+      user-select:none;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color: rgba(255,255,255,.45);
+      font-size: 10px;
+    }
+    .cell:hover{
+      background: rgba(255,255,255,.05);
+      border-color: rgba(255,255,255,.16);
+    }
+    .cell:active{ transform: translateY(1px); }
+    .cell:focus-visible{ outline:none; box-shadow: var(--focus); }
+
+    .cell.done{
+      color: rgba(0,0,0,.65);
+      border-color: rgba(0,0,0,.22);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+    }
+
+    .cell.today{
+      box-shadow: 0 0 0 2px rgba(255,255,255,.25), 0 0 0 6px rgba(255,255,255,.06);
+    }
+
+    /* “Find today” visual pulse */
+    @keyframes flashRing{
+      0%{ box-shadow: 0 0 0 2px rgba(255,255,255,.55), 0 0 0 14px rgba(255,255,255,.12); }
+      100%{ box-shadow: 0 0 0 2px rgba(255,255,255,.25), 0 0 0 26px rgba(255,255,255,0); }
+    }
+    .cell.flash{
+      animation: flashRing 1.05s ease-out 1;
+    }
+
+    .legend{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 12px;
+      flex-wrap:wrap;
+    }
+    .chip{
+      display:inline-flex;
+      gap: 8px;
+      align-items:center;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      padding: 6px 9px;
+      border-radius: 999px;
+      user-select:none;
+    }
+    .chip.clickable{ cursor:pointer; }
+    .chip[data-selected="true"]{
+      border-color: rgba(130,180,255,.40);
+      box-shadow: var(--focus);
+      color: var(--text);
+    }
+    .chip .sw{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.35);
+      flex: 0 0 auto;
+    }
+
+    dialog{
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(20,26,34,.98), rgba(12,15,20,.98));
+      color: var(--text);
+      box-shadow: var(--shadow);
+      padding: 0;
+      width: min(560px, calc(100vw - 28px));
+    }
+    dialog::backdrop{
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(2px);
+    }
+    .dlgHead{
+      padding: 14px 14px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .dlgTitle{
+      margin:0;
+      font-size: 14px;
+      font-weight: 750;
+    }
+    .dlgBody{
+      padding: 14px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+    }
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .row label{
+      color: var(--muted);
+      font-size: 12px;
+      min-width: 92px;
+    }
+
+    .labelsWrap{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+      flex: 1;
+      min-width: 260px;
+    }
+    .labelsList{
+      display:flex;
+      flex-direction:column;
+      gap: 8px;
+    }
+    .labelRow{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+    }
+    .labelRow input[type="text"]{
+      flex: 1;
+      min-width: 180px;
+    }
+    .btnMini{
+      padding: 7px 9px;
+      border-radius: 10px;
+      font-size: 12px;
+    }
+
+    textarea{
+      width: 100%;
+      min-height: 160px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      padding: 10px;
+      border-radius: 12px;
+    }
+    .dlgFoot{
+      padding: 12px 14px 14px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      display:flex;
+      gap: 10px;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+
+    .hint{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.25);
+      color: rgba(255,255,255,.88);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <h1>Everyday Calendar</h1>
+        <div class="sub" id="subText"></div>
+      </div>
+      <div class="toolbar">
+        <button id="btnExport"></button>
+        <button id="btnImport"></button>
+        <button id="btnResetYear" class="btnDanger"></button>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="tabs">
+        <div class="tablist" id="tablist" role="tablist"></div>
+        <div class="tabActions">
+          <button id="btnAddTab" class="btnPrimary"></button>
+          <button id="btnEditTab"></button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="topRow">
+          <div class="stats" id="stats"></div>
+          <div class="controls">
+            <label id="lblYear" style="color:var(--muted);font-size:12px;"></label>
+            <select id="yearSelect"></select>
+
+            <label id="lblType" style="color:var(--muted);font-size:12px;"></label>
+            <select id="labelSelect"></select>
+
+            <label id="lblLang" style="color:var(--muted);font-size:12px;"></label>
+            <select id="langSelect"></select>
+
+            <button id="btnToday"></button>
+          </div>
+        </div>
+
+        <div class="grid" id="monthsGrid"></div>
+
+        <div class="legend" id="legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog: Tab edit/create -->
+  <dialog id="dlgTab">
+    <div class="dlgHead">
+      <h2 class="dlgTitle" id="dlgTabTitle"></h2>
+      <button id="btnCloseTabDlg" aria-label="Close">✕</button>
+    </div>
+    <div class="dlgBody">
+      <div class="row">
+        <label for="tabName" id="lblTabName"></label>
+        <input id="tabName" type="text" maxlength="40" style="flex:1;" />
+      </div>
+
+      <div class="row">
+        <label id="lblDefaultType"></label>
+        <input id="tabDefaultLabelName" type="text" maxlength="24" style="flex:1;min-width:220px;" />
+        <input id="tabColor" type="color" />
+      </div>
+
+      <div class="row" style="align-items:flex-start;">
+        <label id="lblExtraTypes"></label>
+        <div class="labelsWrap">
+          <div id="labelsList" class="labelsList"></div>
+          <div class="row" style="justify-content:space-between;">
+            <button id="btnAddLabel" type="button" class="btnMini"></button>
+          </div>
+          <div class="hint" id="hintTypes"></div>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:space-between;">
+        <button id="btnDuplicateTab"></button>
+        <button id="btnDeleteTab" class="btnDanger"></button>
+      </div>
+      <div class="hint" id="hintTabDialog"></div>
+    </div>
+    <div class="dlgFoot">
+      <button id="btnSaveTab" class="btnPrimary"></button>
+      <button id="btnCancelTab"></button>
+    </div>
+  </dialog>
+
+  <!-- Dialog: Export/Import -->
+  <dialog id="dlgData">
+    <div class="dlgHead">
+      <h2 class="dlgTitle" id="dlgDataTitle"></h2>
+      <button id="btnCloseDataDlg" aria-label="Close">✕</button>
+    </div>
+    <div class="dlgBody">
+      <div class="hint" id="dlgDataHint"></div>
+      <textarea id="dataArea" spellcheck="false"></textarea>
+    </div>
+    <div class="dlgFoot">
+      <button id="btnDataApply" class="btnPrimary"></button>
+      <button id="btnDataCancel"></button>
+    </div>
+  </dialog>
+
+<script>
+(() => {
+  const STORAGE_KEY = "everyday_calendar_v1";
+  const APP_VERSION = 2;
+
+  // Language setting (separate from app state)
+  const LANG_KEY = "everyday_calendar_lang_v1";
+
+  const I18N = {
+    en: {
+      subHtml: `Click a day to light it up. Tabs can have multiple colors (types). Everything is stored in <span class="kbd">localStorage</span> (survives refresh).`,
+      export: "Export",
+      exportTitle: "Export data to JSON",
+      import: "Import",
+      importTitle: "Import data from JSON",
+      resetYear: "Reset year",
+      resetYearTitle: "Clears marks for the selected year in the active tab",
+      addTab: "+ New tab",
+      editTab: "Edit",
+      switchTabTitle: "Switch tab",
+
+      year: "Year",
+      yearAria: "Year selection",
+      type: "Type",
+      typeAria: "Type selection",
+      lang: "Lang",
+      langAria: "Language selection",
+      today: "Today",
+      todayTitle: "Jump to today (highlights it)",
+
+      months: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+      daysCount: (n) => `${n} days`,
+      dayAria: (d, monthName, y) => `${d} ${monthName} ${y}`,
+
+      statsTab: "Tab:",
+      statsMarked: "Marked:",
+      statsStreak: "Current streak:",
+      daysUnit: "days",
+
+      legendChipTitle: "Click = select type",
+      legendHint: "click = toggle, Shift+click = range, 1–9 = type",
+
+      tabDlgEdit: "Edit tab",
+      tabDlgNew: "New tab",
+      close: "Close",
+      name: "Name",
+      namePlaceholder: "e.g. Meditation",
+      defaultType: "Default type",
+      defaultTypePlaceholder: "e.g. done",
+      extraTypes: "Extra types",
+      addType: "+ Add type",
+      typePlaceholder: "e.g. run",
+      typesHint: `Pick the active type and mark days with its color. Tip: <span class="kbd">1–9</span> switches types.`,
+      tabTips: `Tips: click = toggle day (to the selected type). <span class="kbd">Shift</span>+click = range (from the last clicked day).`,
+      duplicate: "Duplicate",
+      deleteTab: "Delete tab",
+      save: "Save",
+      cancel: "Cancel",
+      deleteTypeTitle: "Delete type",
+
+      dataExportTitle: "Export",
+      dataExportHint: "Copy the JSON and keep it as a backup.",
+      dataImportTitle: "Import",
+      dataImportHint: "Paste JSON (export) and click Apply. This overwrites current data. (Import can read older formats too.)",
+      apply: "Apply",
+      dismiss: "Close",
+      importFailed: (msg) => `Import failed: ${msg}`,
+
+      newTabName: "New tab",
+      tabFallbackName: "Tab",
+      defaultTabName: "Meditation",
+      defaultLabelName: "done",
+      tabCopySuffix: "copy",
+    },
+    cs: {
+      subHtml: `Klikni na den a rozsvítíš ho. Záložky mohou mít i více barev (typů). Vše se ukládá do <span class="kbd">localStorage</span> (přežije refresh).`,
+      export: "Export",
+      exportTitle: "Export dat do JSON",
+      import: "Import",
+      importTitle: "Import dat z JSON",
+      resetYear: "Reset roku",
+      resetYearTitle: "Smaže označení pro vybraný rok v aktivní záložce",
+      addTab: "+ Nová záložka",
+      editTab: "Upravit",
+      switchTabTitle: "Přepnout záložku",
+
+      year: "Rok",
+      yearAria: "Výběr roku",
+      type: "Typ",
+      typeAria: "Výběr typu",
+      lang: "Jazyk",
+      langAria: "Výběr jazyka",
+      today: "Dnes",
+      todayTitle: "Přejít na dnešek (zvýrazní ho)",
+
+      months: ["Leden","Únor","Březen","Duben","Květen","Červen","Červenec","Srpen","Září","Říjen","Listopad","Prosinec"],
+      daysCount: (n) => `${n} dní`,
+      dayAria: (d, monthName, y) => `${d}. ${monthName} ${y}`,
+
+      statsTab: "Záložka:",
+      statsMarked: "Označeno:",
+      statsStreak: "Aktuální série:",
+      daysUnit: "dnů",
+
+      legendChipTitle: "Klik = vybrat typ",
+      legendHint: "klik = nastavit/zrušit, Shift+klik = rozsah, 1–9 = typ",
+
+      tabDlgEdit: "Upravit záložku",
+      tabDlgNew: "Nová záložka",
+      close: "Zavřít",
+      name: "Název",
+      namePlaceholder: "Např. Meditace",
+      defaultType: "Výchozí typ",
+      defaultTypePlaceholder: "Např. splněno",
+      extraTypes: "Další typy",
+      addType: "+ Přidat typ",
+      typePlaceholder: "Např. běh",
+      typesHint: `V kalendáři pak vybereš aktivní typ a dny označuješ jeho barvou. Tip: <span class="kbd">1–9</span> přepíná typy.`,
+      tabTips: `Tipy: klik = přepnout den (na zvolený typ). <span class="kbd">Shift</span>+klik = označit rozsah (od posledního kliknutého dne).`,
+      duplicate: "Duplikovat",
+      deleteTab: "Smazat záložku",
+      save: "Uložit",
+      cancel: "Zrušit",
+      deleteTypeTitle: "Smazat typ",
+
+      dataExportTitle: "Export",
+      dataExportHint: "Zkopíruj JSON a ulož si ho jako zálohu.",
+      dataImportTitle: "Import",
+      dataImportHint: "Vlož JSON (export) a klikni Použít. Přepíše to současná data. (Import umí i starý formát.)",
+      apply: "Použít",
+      dismiss: "Zavřít",
+      importFailed: (msg) => `Import se nepovedl: ${msg}`,
+
+      newTabName: "Nová záložka",
+      tabFallbackName: "Záložka",
+      defaultTabName: "Meditace",
+      defaultLabelName: "splněno",
+      tabCopySuffix: "kopie",
+    },
+  };
+
+  function loadLang(){
+    const v = localStorage.getItem(LANG_KEY);
+    return (v === "cs" || v === "en") ? v : "en"; // default EN as requested
+  }
+  function saveLang(l){
+    localStorage.setItem(LANG_KEY, l);
+  }
+
+  let lang = loadLang();
+  function t(key){
+    const dict = I18N[lang] || I18N.en;
+    return dict[key];
+  }
+  function td(key, ...args){
+    const dict = I18N[lang] || I18N.en;
+    const v = dict[key];
+    return (typeof v === "function") ? v(...args) : v;
+  }
+
+  // ---------- Utilities ----------
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const ymd = (y,m,d) => `${y}-${pad2(m)}-${pad2(d)}`;
+
+  function getWeekdayMonFirst(date){
+    const js = date.getDay();
+    return (js + 6) % 7;
+  }
+  function daysInMonth(y, m){
+    return new Date(y, m, 0).getDate(); // m: 1-12
+  }
+  function parseHexColor(c){
+    return /^#[0-9a-fA-F]{6}$/.test(c) ? c : "#82b4ff";
+  }
+  function generateId(){
+    return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  }
+  function parseYmdToLocalDate(key){
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key));
+    if(!m) return new Date(NaN);
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+
+  // “Now” must be refreshable (fixes stale today after midnight without refresh)
+  let now = new Date();
+  let currentYear = now.getFullYear();
+  function syncNow(){
+    now = new Date();
+    currentYear = now.getFullYear();
+  }
+  function getTodayKey(){
+    syncNow();
+    return ymd(now.getFullYear(), now.getMonth()+1, now.getDate());
+  }
+
+  // ---------- Data model (v2) ----------
+  function defaultState(){
+    const id = generateId();
+    return {
+      version: APP_VERSION,
+      activeTabId: id,
+      tabs: [{
+        id,
+        name: td("defaultTabName"),
+        color: "#82b4ff",
+        labels: [
+          { id: "default", name: td("defaultLabelName"), color: "#82b4ff" }
+        ],
+        activeLabelId: "default",
+        marks: {}
+      }]
+    };
+  }
+
+  function normalizeState(input){
+    const base = defaultState();
+    try{
+      const s = input;
+      if(!s || typeof s !== "object") return base;
+
+      const rawTabs = Array.isArray(s.tabs) ? s.tabs : null;
+      if(!rawTabs || rawTabs.length === 0) return base;
+
+      const out = {
+        version: APP_VERSION,
+        activeTabId: String(s.activeTabId || rawTabs[0].id || base.activeTabId),
+        tabs: []
+      };
+
+      for(const t0 of rawTabs){
+        const id = String((t0 && t0.id) ? t0.id : generateId());
+        const name = String((t0 && t0.name) ? t0.name : td("tabFallbackName")).slice(0,40);
+
+        let labels = [];
+        if(t0 && Array.isArray(t0.labels) && t0.labels.length){
+          labels = t0.labels.map(l => ({
+            id: String(l && l.id ? l.id : generateId()),
+            name: String(l && l.name ? l.name : "type").slice(0,24),
+            color: parseHexColor(l && l.color ? l.color : "#82b4ff"),
+          }));
+        } else {
+          const legacyColor = parseHexColor(t0 && t0.color ? t0.color : "#82b4ff");
+          labels = [{ id: "default", name: td("defaultLabelName"), color: legacyColor }];
+        }
+
+        if(labels.length === 0){
+          labels = [{ id: "default", name: td("defaultLabelName"), color: "#82b4ff" }];
+        }
+
+        const seen = new Set();
+        labels = labels.map(l => {
+          let lid = l.id;
+          while(seen.has(lid)) lid = generateId();
+          seen.add(lid);
+          return { ...l, id: lid };
+        });
+
+        const primaryColor = labels[0].color;
+
+        const marks = (t0 && t0.marks && typeof t0.marks === "object") ? t0.marks : {};
+        const cleanMarks = {};
+        for(const [year, yearObj] of Object.entries(marks)){
+          if(!yearObj || typeof yearObj !== "object") continue;
+          const y = String(year);
+          cleanMarks[y] = {};
+          for(const [dateKey, val] of Object.entries(yearObj)){
+            if(val === true){
+              cleanMarks[y][dateKey] = labels[0].id;
+            } else if(typeof val === "string" && val.trim()){
+              cleanMarks[y][dateKey] = val;
+            }
+          }
+          if(Object.keys(cleanMarks[y]).length === 0) delete cleanMarks[y];
+        }
+
+        const proposedActive = String((t0 && t0.activeLabelId) ? t0.activeLabelId : labels[0].id);
+        const activeLabelId = labels.some(l => l.id === proposedActive) ? proposedActive : labels[0].id;
+
+        out.tabs.push({
+          id,
+          name,
+          color: primaryColor,
+          labels,
+          activeLabelId,
+          marks: cleanMarks
+        });
+      }
+
+      if(!out.tabs.some(t => t.id === out.activeTabId)){
+        out.activeTabId = out.tabs[0].id;
+      }
+      return out;
+    }catch{
+      return base;
+    }
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      return normalizeState(parsed);
+    }catch{
+      return defaultState();
+    }
+  }
+
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function getActiveTab(){
+    return state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0];
+  }
+
+  function ensureYearMarks(tab, year){
+    const y = String(year);
+    if(!tab.marks[y]) tab.marks[y] = {};
+    return tab.marks[y];
+  }
+
+  function getLabelById(tab, labelId){
+    return tab.labels.find(l => l.id === labelId) || null;
+  }
+
+  function getActiveLabelId(tab){
+    const fallback = tab.labels[0]?.id || "default";
+    if(tab.activeLabelId && tab.labels.some(l => l.id === tab.activeLabelId)) return tab.activeLabelId;
+    tab.activeLabelId = fallback;
+    return fallback;
+  }
+
+  function setActiveLabelId(tab, labelId){
+    if(tab.labels.some(l => l.id === labelId)){
+      tab.activeLabelId = labelId;
+      saveState();
+    }
+  }
+
+  // ---------- DOM refs ----------
+  const tablist = document.getElementById("tablist");
+  const monthsGrid = document.getElementById("monthsGrid");
+  const statsEl = document.getElementById("stats");
+  const legendEl = document.getElementById("legend");
+
+  const yearSelect = document.getElementById("yearSelect");
+  const labelSelect = document.getElementById("labelSelect");
+  const langSelect = document.getElementById("langSelect");
+  const btnToday = document.getElementById("btnToday");
+  const btnResetYear = document.getElementById("btnResetYear");
+  const btnAddTab = document.getElementById("btnAddTab");
+  const btnEditTab = document.getElementById("btnEditTab");
+  const btnExport = document.getElementById("btnExport");
+  const btnImport = document.getElementById("btnImport");
+
+  const subText = document.getElementById("subText");
+  const lblYear = document.getElementById("lblYear");
+  const lblType = document.getElementById("lblType");
+  const lblLang = document.getElementById("lblLang");
+
+  const dlgTab = document.getElementById("dlgTab");
+  const dlgTabTitle = document.getElementById("dlgTabTitle");
+  const tabName = document.getElementById("tabName");
+  const tabColor = document.getElementById("tabColor");
+  const tabDefaultLabelName = document.getElementById("tabDefaultLabelName");
+  const labelsList = document.getElementById("labelsList");
+  const btnAddLabel = document.getElementById("btnAddLabel");
+
+  const lblTabName = document.getElementById("lblTabName");
+  const lblDefaultType = document.getElementById("lblDefaultType");
+  const lblExtraTypes = document.getElementById("lblExtraTypes");
+  const hintTypes = document.getElementById("hintTypes");
+  const hintTabDialog = document.getElementById("hintTabDialog");
+
+  const btnSaveTab = document.getElementById("btnSaveTab");
+  const btnCancelTab = document.getElementById("btnCancelTab");
+  const btnCloseTabDlg = document.getElementById("btnCloseTabDlg");
+  const btnDeleteTab = document.getElementById("btnDeleteTab");
+  const btnDuplicateTab = document.getElementById("btnDuplicateTab");
+
+  const dlgData = document.getElementById("dlgData");
+  const dlgDataTitle = document.getElementById("dlgDataTitle");
+  const dlgDataHint = document.getElementById("dlgDataHint");
+  const dataArea = document.getElementById("dataArea");
+  const btnDataApply = document.getElementById("btnDataApply");
+  const btnDataCancel = document.getElementById("btnDataCancel");
+  const btnCloseDataDlg = document.getElementById("btnCloseDataDlg");
+
+  // ---------- App state ----------
+  syncNow();
+  let selectedYear = currentYear;
+  let state = loadState();
+  saveState(); // persist normalized format
+
+  let lastClickedDateKey = null; // for shift range selection
+
+  function applyI18nStatic(){
+    document.documentElement.lang = lang;
+
+    subText.innerHTML = td("subHtml");
+
+    btnExport.textContent = td("export");
+    btnExport.title = td("exportTitle");
+
+    btnImport.textContent = td("import");
+    btnImport.title = td("importTitle");
+
+    btnResetYear.textContent = td("resetYear");
+    btnResetYear.title = td("resetYearTitle");
+
+    btnAddTab.textContent = td("addTab");
+    btnEditTab.textContent = td("editTab");
+
+    lblYear.textContent = td("year");
+    yearSelect.setAttribute("aria-label", td("yearAria"));
+
+    lblType.textContent = td("type");
+    labelSelect.setAttribute("aria-label", td("typeAria"));
+
+    lblLang.textContent = td("lang");
+    langSelect.setAttribute("aria-label", td("langAria"));
+
+    btnToday.textContent = td("today");
+    btnToday.title = td("todayTitle");
+
+    // Dialog labels
+    lblTabName.textContent = td("name");
+    tabName.placeholder = td("namePlaceholder");
+
+    lblDefaultType.textContent = td("defaultType");
+    tabDefaultLabelName.placeholder = td("defaultTypePlaceholder");
+
+    lblExtraTypes.textContent = td("extraTypes");
+    btnAddLabel.textContent = td("addType");
+    hintTypes.innerHTML = td("typesHint");
+    hintTabDialog.innerHTML = td("tabTips");
+
+    btnDuplicateTab.textContent = td("duplicate");
+    btnDeleteTab.textContent = td("deleteTab");
+
+    btnSaveTab.textContent = td("save");
+    btnCancelTab.textContent = td("cancel");
+
+    btnDataCancel.textContent = td("cancel");
+
+    // Lang select options
+    const old = langSelect.value;
+    langSelect.innerHTML = "";
+    [
+      { id: "en", label: "English" },
+      { id: "cs", label: "Čeština" },
+    ].forEach(o => {
+      const opt = document.createElement("option");
+      opt.value = o.id;
+      opt.textContent = o.label;
+      langSelect.appendChild(opt);
+    });
+    langSelect.value = (old === "en" || old === "cs") ? old : lang;
+    langSelect.value = lang;
+  }
+
+  // ---------- Rendering ----------
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  function textStat(label, value, strong=false){
+    const span = document.createElement("span");
+    span.innerHTML = `<span>${escapeHtml(label)} </span><span class="${strong ? "statStrong" : ""}">${escapeHtml(value)}</span>`;
+    return span;
+  }
+
+  function renderYearSelect(){
+    const years = [];
+    for(let y = currentYear - 2; y <= currentYear + 2; y++) years.push(y);
+
+    yearSelect.innerHTML = "";
+    years.forEach(y => {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = String(y);
+      yearSelect.appendChild(opt);
+    });
+
+    if(!years.includes(selectedYear)) selectedYear = currentYear;
+    yearSelect.value = String(selectedYear);
+  }
+
+  function renderLabelSelect(){
+    const tab = getActiveTab();
+    const activeLabelId = getActiveLabelId(tab);
+
+    labelSelect.innerHTML = "";
+    tab.labels.forEach((l, idx) => {
+      const opt = document.createElement("option");
+      opt.value = l.id;
+      opt.textContent = `${idx+1}. ${l.name}`;
+      labelSelect.appendChild(opt);
+    });
+    labelSelect.value = activeLabelId;
+  }
+
+  function renderTabs(){
+    tablist.innerHTML = "";
+    tablist.setAttribute("aria-label", td("statsTab")); // not perfect but better than nothing
+    state.tabs.forEach(tab => {
+      const b = document.createElement("button");
+      b.className = "tab";
+      b.type = "button";
+      b.role = "tab";
+      b.setAttribute("aria-selected", tab.id === state.activeTabId ? "true" : "false");
+      b.title = td("switchTabTitle");
+
+      const dot = document.createElement("span");
+      dot.className = "dot";
+
+      const colors = (tab.labels || []).map(l => l.color).slice(0, 6);
+      if(colors.length >= 2){
+        dot.style.background = `conic-gradient(${colors.join(", ")})`;
+      } else {
+        dot.style.background = tab.color;
+      }
+
+      const name = document.createElement("span");
+      name.textContent = tab.name;
+
+      b.appendChild(dot);
+      b.appendChild(name);
+      b.addEventListener("click", () => {
+        state.activeTabId = tab.id;
+        saveState();
+        lastClickedDateKey = null;
+        renderAll();
+      });
+
+      tablist.appendChild(b);
+    });
+  }
+
+  function calcCountsForYear(tab, year){
+    const marks = ensureYearMarks(tab, year);
+    const counts = new Map(tab.labels.map(l => [l.id, 0]));
+    let total = 0;
+
+    for(const v of Object.values(marks)){
+      const labelId = (v === true) ? (tab.labels[0]?.id) : v;
+      if(typeof labelId === "string"){
+        total++;
+        counts.set(labelId, (counts.get(labelId) || 0) + 1);
+      }
+    }
+    return { total, counts };
+  }
+
+  function renderLegend(){
+    const tab = getActiveTab();
+    const activeLabelId = getActiveLabelId(tab);
+    const { counts } = calcCountsForYear(tab, selectedYear);
+
+    legendEl.innerHTML = "";
+
+    tab.labels.forEach((l) => {
+      const chip = document.createElement("span");
+      chip.className = "chip clickable";
+      chip.dataset.selected = (l.id === activeLabelId) ? "true" : "false";
+      chip.title = td("legendChipTitle");
+
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      sw.style.background = l.color;
+
+      const c = counts.get(l.id) || 0;
+      chip.appendChild(sw);
+      chip.appendChild(document.createTextNode(`${l.name} (${c})`));
+
+      chip.addEventListener("click", () => {
+        setActiveLabelId(tab, l.id);
+        renderLabelSelect();
+        renderLegend();
+      });
+
+      legendEl.appendChild(chip);
+    });
+
+    const chip2 = document.createElement("span");
+    chip2.className = "chip";
+    chip2.appendChild(document.createTextNode(td("legendHint")));
+    legendEl.appendChild(chip2);
+  }
+
+  function renderStats(){
+    const tab = getActiveTab();
+    const { total } = calcCountsForYear(tab, selectedYear);
+
+    const isLeap = (selectedYear % 4 === 0 && (selectedYear % 100 !== 0 || selectedYear % 400 === 0));
+    const totalDays = isLeap ? 366 : 365;
+    const pct = Math.round((total / totalDays) * 100);
+
+    const endDate = (selectedYear === currentYear) ? new Date(now) : new Date(selectedYear, 11, 31);
+    const start = new Date(selectedYear, 0, 1);
+    const maxEnd = endDate < start ? start : endDate;
+
+    const marks = ensureYearMarks(tab, selectedYear);
+    let streak = 0;
+    let d = new Date(maxEnd.getFullYear(), maxEnd.getMonth(), maxEnd.getDate());
+    while(d.getFullYear() === selectedYear){
+      const k = ymd(d.getFullYear(), d.getMonth()+1, d.getDate());
+      if(marks[k]){
+        streak++;
+        d.setDate(d.getDate() - 1);
+      } else break;
+    }
+
+    statsEl.innerHTML = "";
+    statsEl.appendChild(textStat(td("statsTab"), tab.name, true));
+    statsEl.appendChild(textStat(td("statsMarked"), `${total}/${totalDays} (${pct}%)`, true));
+    statsEl.appendChild(textStat(td("statsStreak"), `${streak} ${td("daysUnit")}`, true));
+  }
+
+  function getCellColor(tab, markValue){
+    if(!markValue) return "rgba(255,255,255,.02)";
+    const labelId = (markValue === true) ? (tab.labels[0]?.id) : markValue;
+    const label = getLabelById(tab, labelId);
+    return (label ? label.color : tab.color);
+  }
+
+  function renderCalendar(){
+    const tab = getActiveTab();
+    const marks = ensureYearMarks(tab, selectedYear);
+    monthsGrid.innerHTML = "";
+
+    const monthNames = td("months");
+    const todayKey = getTodayKey(); // refreshable
+
+    for(let m=1; m<=12; m++){
+      const monthCard = document.createElement("section");
+      monthCard.className = "month";
+      monthCard.id = `month-${m}`;
+
+      const head = document.createElement("div");
+      head.className = "monthHeader";
+
+      const h = document.createElement("h3");
+      h.className = "monthName";
+      h.textContent = monthNames[m-1];
+
+      const meta = document.createElement("div");
+      meta.className = "monthMeta";
+      const dim = daysInMonth(selectedYear, m);
+      meta.textContent = td("daysCount", dim);
+
+      head.appendChild(h);
+      head.appendChild(meta);
+      monthCard.appendChild(head);
+
+      const grid = document.createElement("div");
+      grid.className = "days";
+
+      const first = new Date(selectedYear, m-1, 1);
+      const lead = getWeekdayMonFirst(first);
+      for(let i=0; i<lead; i++){
+        const blank = document.createElement("div");
+        blank.style.width = "var(--cell)";
+        blank.style.height = "var(--cell)";
+        blank.style.opacity = "0";
+        blank.style.pointerEvents = "none";
+        grid.appendChild(blank);
+      }
+
+      const dim2 = daysInMonth(selectedYear, m);
+      for(let d=1; d<=dim2; d++){
+        const key = ymd(selectedYear, m, d);
+        const val = marks[key];
+        const done = !!val;
+
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "cell" + (done ? " done" : "");
+        cell.dataset.key = key;
+
+        const aria = td("dayAria", d, monthNames[m-1], selectedYear);
+        cell.setAttribute("aria-label", aria);
+        cell.title = aria;
+
+        if(done){
+          cell.style.background = getCellColor(tab, val);
+        }
+
+        if(key === todayKey && selectedYear === now.getFullYear()){
+          cell.classList.add("today");
+        }
+
+        cell.addEventListener("click", (ev) => onCellClick(ev, key));
+        grid.appendChild(cell);
+      }
+
+      monthCard.appendChild(grid);
+      monthsGrid.appendChild(monthCard);
+    }
+  }
+
+  function onCellClick(ev, key){
+    const tab = getActiveTab();
+    const marks = ensureYearMarks(tab, selectedYear);
+    const activeLabelId = getActiveLabelId(tab);
+
+    const currentVal = marks[key];
+    const currentLabelId = (currentVal === true) ? (tab.labels[0]?.id) : currentVal;
+
+    if(ev.shiftKey && lastClickedDateKey && lastClickedDateKey.slice(0,4) === String(selectedYear)){
+      const a = parseYmdToLocalDate(lastClickedDateKey);
+      const b = parseYmdToLocalDate(key);
+      const start = a < b ? a : b;
+      const end = a < b ? b : a;
+
+      const willSet = currentLabelId !== activeLabelId;
+
+      const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      while(cur <= end){
+        if(cur.getFullYear() !== selectedYear) break;
+        const k = ymd(cur.getFullYear(), cur.getMonth()+1, cur.getDate());
+        if(willSet) marks[k] = activeLabelId;
+        else delete marks[k];
+        cur.setDate(cur.getDate() + 1);
+      }
+    } else {
+      if(currentLabelId === activeLabelId) delete marks[key];
+      else marks[key] = activeLabelId;
+    }
+
+    lastClickedDateKey = key;
+    saveState();
+    rerenderCellsForYear();
+    renderStats();
+    renderLegend();
+  }
+
+  function rerenderCellsForYear(){
+    const tab = getActiveTab();
+    const marks = ensureYearMarks(tab, selectedYear);
+
+    const todayKey = getTodayKey();
+
+    document.querySelectorAll(".cell").forEach(cell => {
+      const key = cell.dataset.key;
+      const val = marks[key];
+      const done = !!val;
+
+      cell.classList.toggle("done", done);
+      cell.style.background = done ? getCellColor(tab, val) : "rgba(255,255,255,.02)";
+      cell.style.color = done ? "rgba(0,0,0,.65)" : "rgba(255,255,255,.45)";
+      cell.style.borderColor = done ? "rgba(0,0,0,.22)" : "rgba(255,255,255,.10)";
+
+      cell.classList.toggle("today", (key === todayKey && selectedYear === now.getFullYear()));
+    });
+  }
+
+  function renderAll(){
+    syncNow();
+    applyI18nStatic();
+    renderYearSelect();
+    renderTabs();
+    renderLabelSelect();
+    renderStats();
+    renderCalendar();
+    renderLegend();
+  }
+
+  // ---------- Tab dialog ----------
+  let tabDlgMode = "edit"; // "edit" | "create"
+  let editingTabId = null;
+
+  function buildLabelRow(label){
+    const row = document.createElement("div");
+    row.className = "labelRow";
+    row.dataset.id = label.id;
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.maxLength = 24;
+    name.placeholder = td("typePlaceholder");
+    name.value = label.name;
+
+    const color = document.createElement("input");
+    color.type = "color";
+    color.value = parseHexColor(label.color);
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btnMini btnDanger";
+    del.textContent = "✕";
+    del.title = td("deleteTypeTitle");
+
+    del.addEventListener("click", () => row.remove());
+
+    row.appendChild(name);
+    row.appendChild(color);
+    row.appendChild(del);
+
+    return row;
+  }
+
+  function openTabDialog(mode){
+    tabDlgMode = mode;
+    const active = getActiveTab();
+    const tab = (mode === "edit")
+      ? active
+      : {
+          name: td("newTabName"),
+          labels: [{ id: "default", name: td("defaultLabelName"), color: "#82b4ff" }],
+          color: "#82b4ff",
+          activeLabelId: "default"
+        };
+
+    editingTabId = (mode === "edit") ? active.id : null;
+
+    dlgTabTitle.textContent = (mode === "edit") ? td("tabDlgEdit") : td("tabDlgNew");
+    tabName.value = tab.name;
+
+    const def = tab.labels[0] || { id: "default", name: td("defaultLabelName"), color: tab.color || "#82b4ff" };
+    tabDefaultLabelName.value = String(def.name || td("defaultLabelName")).slice(0,24);
+    tabColor.value = parseHexColor(def.color || tab.color);
+
+    labelsList.innerHTML = "";
+    const rest = (tab.labels || []).slice(1);
+    rest.forEach(l => labelsList.appendChild(buildLabelRow(l)));
+
+    btnDeleteTab.style.display = (mode === "edit" && state.tabs.length > 1) ? "" : "none";
+    btnDuplicateTab.style.display = (mode === "edit") ? "" : "none";
+
+    dlgTab.showModal();
+    tabName.focus();
+    tabName.select();
+  }
+
+  function closeTabDialog(){
+    if(dlgTab.open) dlgTab.close();
+  }
+
+  function saveTabDialog(){
+    const name = tabName.value.trim() || td("tabFallbackName");
+
+    const defaultLabel = {
+      id: "default",
+      name: (tabDefaultLabelName.value.trim() || td("defaultLabelName")).slice(0,24),
+      color: parseHexColor(tabColor.value),
+    };
+
+    const extra = [];
+    labelsList.querySelectorAll(".labelRow").forEach(row => {
+      const id = String(row.dataset.id || generateId());
+      const inputs = row.querySelectorAll("input");
+      const nm = (inputs[0]?.value || "").trim();
+      const col = (inputs[1]?.value || "#82b4ff");
+      const labelName = (nm || "type").slice(0,24);
+      extra.push({
+        id,
+        name: labelName,
+        color: parseHexColor(col),
+      });
+    });
+
+    const seen = new Set(["default"]);
+    const labels = [defaultLabel, ...extra.map(l => {
+      let lid = l.id;
+      if(lid === "default") lid = generateId();
+      while(seen.has(lid)) lid = generateId();
+      seen.add(lid);
+      return { ...l, id: lid };
+    })];
+
+    if(tabDlgMode === "create"){
+      const id = generateId();
+      state.tabs.push({
+        id,
+        name,
+        color: labels[0].color,
+        labels,
+        activeLabelId: labels[0].id,
+        marks: {}
+      });
+      state.activeTabId = id;
+    } else {
+      const tab = state.tabs.find(t => t.id === editingTabId);
+      if(tab){
+        const oldIds = new Set((tab.labels || []).map(l => l.id));
+        const newIds = new Set(labels.map(l => l.id));
+        const removed = [...oldIds].filter(x => !newIds.has(x));
+
+        if(removed.length){
+          for(const yearObj of Object.values(tab.marks || {})){
+            if(!yearObj || typeof yearObj !== "object") continue;
+            for(const [k, v] of Object.entries(yearObj)){
+              if(typeof v === "string" && removed.includes(v)){
+                yearObj[k] = labels[0].id;
+              } else if(v === true) {
+                yearObj[k] = labels[0].id;
+              }
+            }
+          }
+        }
+
+        tab.name = name;
+        tab.labels = labels;
+        tab.color = labels[0].color;
+
+        if(!tab.labels.some(l => l.id === tab.activeLabelId)){
+          tab.activeLabelId = labels[0].id;
+        }
+      }
+    }
+
+    saveState();
+    closeTabDialog();
+    lastClickedDateKey = null;
+    renderAll();
+  }
+
+  function deleteActiveTab(){
+    if(state.tabs.length <= 1) return;
+    const idx = state.tabs.findIndex(t => t.id === state.activeTabId);
+    if(idx >= 0){
+      state.tabs.splice(idx, 1);
+      state.activeTabId = state.tabs[Math.max(0, idx-1)].id;
+      saveState();
+      closeTabDialog();
+      renderAll();
+    }
+  }
+
+  function duplicateActiveTab(){
+    const t0 = getActiveTab();
+    const id = generateId();
+    const marksCopy = JSON.parse(JSON.stringify(t0.marks || {}));
+    const labelsCopy = JSON.parse(JSON.stringify(t0.labels || []));
+    state.tabs.push({
+      id,
+      name: `${t0.name} (${td("tabCopySuffix")})`.slice(0,40),
+      color: t0.color,
+      labels: labelsCopy,
+      activeLabelId: (labelsCopy[0]?.id) || "default",
+      marks: marksCopy
+    });
+    state.activeTabId = id;
+    saveState();
+    closeTabDialog();
+    renderAll();
+  }
+
+  btnAddLabel.addEventListener("click", () => {
+    const row = buildLabelRow({ id: generateId(), name: "type", color: "#82b4ff" });
+    labelsList.appendChild(row);
+    const input = row.querySelector('input[type="text"]');
+    if(input) input.focus();
+  });
+
+  // ---------- Data dialog (export/import) ----------
+  let dataDlgMode = "export"; // "export" | "import"
+
+  function openDataDialog(mode){
+    dataDlgMode = mode;
+    if(mode === "export"){
+      dlgDataTitle.textContent = td("dataExportTitle");
+      dlgDataHint.textContent = td("dataExportHint");
+      dataArea.value = JSON.stringify(state, null, 2);
+      dataArea.readOnly = true;
+      btnDataApply.textContent = td("dismiss");
+    } else {
+      dlgDataTitle.textContent = td("dataImportTitle");
+      dlgDataHint.textContent = td("dataImportHint");
+      dataArea.value = "";
+      dataArea.readOnly = false;
+      btnDataApply.textContent = td("apply");
+    }
+    dlgData.showModal();
+    dataArea.focus();
+    if(mode === "export") dataArea.select();
+  }
+
+  function closeDataDialog(){
+    if(dlgData.open) dlgData.close();
+  }
+
+  function applyDataDialog(){
+    if(dataDlgMode === "export"){
+      closeDataDialog();
+      return;
+    }
+    try{
+      const incoming = JSON.parse(dataArea.value);
+      const normalized = normalizeState(incoming);
+      state = normalized;
+      saveState();
+      closeDataDialog();
+      lastClickedDateKey = null;
+      renderAll();
+    }catch(e){
+      alert(td("importFailed", e.message));
+    }
+  }
+
+  // ---------- Actions ----------
+  yearSelect.addEventListener("change", () => {
+    selectedYear = Number(yearSelect.value);
+    lastClickedDateKey = null;
+    renderAll();
+  });
+
+  labelSelect.addEventListener("change", () => {
+    const tab = getActiveTab();
+    setActiveLabelId(tab, labelSelect.value);
+    renderLegend();
+  });
+
+  // FIX 1: “Today” uses fresh date, scrolls to exact day cell, sets lastClickedDateKey,
+  // and visibly pulses the cell (no refresh needed after midnight).
+  btnToday.addEventListener("click", () => {
+    const todayKey = getTodayKey();
+    const todayYear = now.getFullYear();
+
+    if(selectedYear !== todayYear){
+      selectedYear = todayYear;
+      yearSelect.value = String(selectedYear);
+      renderAll();
+    }
+
+    const cell = document.querySelector(`.cell[data-key="${todayKey}"]`);
+    if(cell){
+      cell.scrollIntoView({ behavior: "smooth", block: "center" });
+      // reset + re-trigger animation
+      cell.classList.remove("flash");
+      void cell.offsetWidth;
+      cell.classList.add("flash");
+
+      // Set “selection anchor” for Shift+click ranges to today
+      lastClickedDateKey = todayKey;
+
+      // Optional: focus the cell for keyboard continuity
+      try { cell.focus({ preventScroll: true }); } catch {}
+      return;
+    }
+
+    const m = now.getMonth()+1;
+    const el = document.getElementById(`month-${m}`);
+    if(el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    lastClickedDateKey = todayKey;
+  });
+
+  btnResetYear.addEventListener("click", () => {
+    const tab = getActiveTab();
+    const y = String(selectedYear);
+    if(tab.marks && tab.marks[y]){
+      delete tab.marks[y];
+      saveState();
+      lastClickedDateKey = null;
+      renderAll();
+    }
+  });
+
+  btnAddTab.addEventListener("click", () => openTabDialog("create"));
+  btnEditTab.addEventListener("click", () => openTabDialog("edit"));
+
+  btnSaveTab.addEventListener("click", saveTabDialog);
+  btnCancelTab.addEventListener("click", closeTabDialog);
+  btnCloseTabDlg.addEventListener("click", closeTabDialog);
+  btnDeleteTab.addEventListener("click", deleteActiveTab);
+  btnDuplicateTab.addEventListener("click", duplicateActiveTab);
+
+  btnExport.addEventListener("click", () => openDataDialog("export"));
+  btnImport.addEventListener("click", () => openDataDialog("import"));
+  btnDataApply.addEventListener("click", applyDataDialog);
+  btnDataCancel.addEventListener("click", closeDataDialog);
+  btnCloseDataDlg.addEventListener("click", closeDataDialog);
+
+  dlgTab.addEventListener("cancel", (e) => { e.preventDefault(); closeTabDialog(); });
+  dlgData.addEventListener("cancel", (e) => { e.preventDefault(); closeDataDialog(); });
+
+  // Language switching
+  langSelect.addEventListener("change", () => {
+    const v = langSelect.value;
+    if(v === "en" || v === "cs"){
+      lang = v;
+      saveLang(lang);
+      renderAll();
+    }
+  });
+
+  // Keyboard shortcuts: 1–9 to select label
+  window.addEventListener("keydown", (e) => {
+    if(dlgTab.open || dlgData.open) return;
+    if(e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
+
+    const digit = Number(e.key);
+    if(digit >= 1 && digit <= 9){
+      const tab = getActiveTab();
+      const idx = digit - 1;
+      const label = tab.labels[idx];
+      if(label){
+        setActiveLabelId(tab, label.id);
+        renderLabelSelect();
+        renderLegend();
+      }
+    }
+  });
+
+  // ---------- Init ----------
+  renderAll();
+})();
+</script>
+</body>
+</html>
