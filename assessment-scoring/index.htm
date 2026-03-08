@@ -789,40 +789,37 @@
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
       const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
       const comparisonStroke = createAreaGradient(cur, cx, cy, radius);
-      const comparisonFill = createAreaGradient(cur, cx, cy, radius, 0.16);
-      drawDataset(comparisonValues, comparisonStroke, comparisonFill, false);
+      const comparisonColors = cur.areas.map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+      drawComparisonDataset(comparisonValues, comparisonStroke, comparisonColors);
     }
 
-    function createAreaGradient(run, x, y, r, alpha){
+    function createAreaGradient(run, x, y, r){
       const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
       if(typeof ctx.createConicGradient === 'function'){
         const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
         if(!colors.length){
-          const fallback = alpha ? `rgba(255,255,255,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
-          gradient.addColorStop(0, fallback);
-          gradient.addColorStop(1, fallback);
+          gradient.addColorStop(0, DEFAULT_AREA_COMPARISON_COLOR);
+          gradient.addColorStop(1, DEFAULT_AREA_COMPARISON_COLOR);
           return gradient;
         }
         colors.forEach((color, idx) => {
           const from = idx / colors.length;
           const to = (idx + 1) / colors.length;
-          const c = alpha ? hexToRgba(color, alpha) : color;
-          gradient.addColorStop(from, c);
-          gradient.addColorStop(to, c);
+          gradient.addColorStop(from, color);
+          gradient.addColorStop(to, color);
         });
         return gradient;
       }
 
       const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
       if(!colors.length){
-        const fallback = alpha ? `rgba(255,255,255,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
-        fallbackGradient.addColorStop(0, fallback);
-        fallbackGradient.addColorStop(1, fallback);
+        fallbackGradient.addColorStop(0, DEFAULT_AREA_COMPARISON_COLOR);
+        fallbackGradient.addColorStop(1, DEFAULT_AREA_COMPARISON_COLOR);
         return fallbackGradient;
       }
       colors.forEach((color, idx) => {
         const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
-        fallbackGradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
+        fallbackGradient.addColorStop(pos, color);
       });
       return fallbackGradient;
     }
@@ -836,16 +833,44 @@
       return `rgba(${r},${g},${b},${alpha})`;
     }
 
-    function drawDataset(values, stroke, fill, points){
-      ctx.beginPath();
-      values.forEach((v,i) => {
+    function getPolygonPoints(values){
+      return values.map((v,i) => {
         const rr = radius * (Math.max(0, Math.min(10, v))/10);
         const a = -Math.PI/2 + i*(Math.PI*2/n);
-        const x = cx + Math.cos(a)*rr;
-        const y = cy + Math.sin(a)*rr;
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+        return { x: cx + Math.cos(a)*rr, y: cy + Math.sin(a)*rr, value: v };
       });
+    }
+
+    function tracePolygon(points){
+      ctx.beginPath();
+      points.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
       ctx.closePath();
+    }
+
+    function drawComparisonDataset(values, stroke, areaColors){
+      const points = getPolygonPoints(values);
+      ctx.save();
+      tracePolygon(points);
+      ctx.clip();
+      points.forEach((p, i) => {
+        const peakColor = areaColors[i] || DEFAULT_AREA_COMPARISON_COLOR;
+        const fadeDistance = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
+        const radial = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, fadeDistance);
+        radial.addColorStop(0, hexToRgba(peakColor, 0.42));
+        radial.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = radial;
+        ctx.fillRect(0, 0, W, H);
+      });
+      ctx.restore();
+      tracePolygon(points);
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawDataset(values, stroke, fill, points){
+      const datasetPoints = getPolygonPoints(values);
+      tracePolygon(datasetPoints);
       ctx.fillStyle = fill;
       ctx.strokeStyle = stroke;
       ctx.lineWidth = 2;
@@ -853,22 +878,18 @@
       ctx.stroke();
 
       if(points){
-        values.forEach((v,i) => {
-          const rr = radius * (Math.max(0, Math.min(10, v))/10);
-          const a = -Math.PI/2 + i*(Math.PI*2/n);
-          const x = cx + Math.cos(a)*rr;
-          const y = cy + Math.sin(a)*rr;
+        datasetPoints.forEach((point) => {
           ctx.beginPath();
-          ctx.arc(x,y,11,0,Math.PI*2);
+          ctx.arc(point.x,point.y,11,0,Math.PI*2);
           ctx.fillStyle = '#0f1117';
           ctx.fill();
           ctx.strokeStyle = stroke;
           ctx.stroke();
           ctx.fillStyle = '#e8ecf2';
           ctx.font = '12px system-ui';
-          const txt = String(v || 0);
+          const txt = String(point.value || 0);
           const m = ctx.measureText(txt);
-          ctx.fillText(txt, x-m.width/2, y+4);
+          ctx.fillText(txt, point.x-m.width/2, point.y+4);
         });
       }
     }
