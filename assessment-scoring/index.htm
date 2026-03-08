@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assessment Scoring</title>
+  <style>
+    :root{
+      --bg:#0f1117;
+      --panel:#171b24;
+      --line:#293040;
+      --text:#e8ecf2;
+      --muted:#9ca6b8;
+      --accent:#7bc1ff;
+      --accent2:#ffd27b;
+      --danger:#ff7f7f;
+      --ok:#87e3a2;
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text);
+      background:radial-gradient(1100px 700px at 20% -10%,#1e2940 0,transparent 55%),var(--bg);
+    }
+    .wrap{max-width:1240px;margin:24px auto;padding:0 16px 40px}
+    .top{
+      display:flex;flex-wrap:wrap;gap:12px 16px;justify-content:space-between;align-items:flex-end;margin-bottom:14px;
+    }
+    h1{margin:0;font-size:28px}
+    .sub{margin:6px 0 0;color:var(--muted);max-width:80ch;line-height:1.45}
+    .panel{
+      background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:var(--radius);
+      padding:14px;
+    }
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    button,input,select,textarea{
+      font:inherit;color:var(--text);
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:10px;
+      padding:8px 10px;
+    }
+    button{cursor:pointer}
+    button:hover{background:rgba(255,255,255,.1)}
+    .btnPrimary{background:rgba(123,193,255,.14);border-color:rgba(123,193,255,.35)}
+    .btnDanger{background:rgba(255,127,127,.12);border-color:rgba(255,127,127,.35)}
+    .layout{display:grid;grid-template-columns:320px 1fr;gap:12px}
+    @media (max-width:1000px){.layout{grid-template-columns:1fr}}
+    .history{display:flex;flex-direction:column;gap:8px;max-height:68vh;overflow:auto;padding-right:4px}
+    .history button{text-align:left;width:100%}
+    .history button.active{border-color:var(--accent);background:rgba(123,193,255,.12)}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:860px){.grid{grid-template-columns:1fr}}
+    .area{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(0,0,0,.18)}
+    .areaHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+    .area h3{margin:0;font-size:16px}
+    .chip{font-size:12px;color:var(--muted)}
+    .itemRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:7px 0}
+    .itemRow input[type='number']{width:74px}
+    .small{font-size:12px;color:var(--muted)}
+    .chartWrap{display:grid;grid-template-columns:minmax(320px,470px) 1fr;gap:12px;align-items:start;margin-bottom:12px}
+    @media (max-width:900px){.chartWrap{grid-template-columns:1fr}}
+    canvas{width:100%;height:auto;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:12px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
+    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+    .targets table{width:100%;border-collapse:collapse;font-size:13px}
+    .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+    .footer{margin-top:12px;font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Assessment Scoring / Wheel of Life</h1>
+        <p class="sub">Každou oblast ohodnoť 1-10 (10 = maximální spokojenost). Ukládá se historie hodnocení do Local Storage, můžeš exportovat/importovat JSON a porovnat současný průchod s předchozím.</p>
+      </div>
+      <div class="toolbar panel">
+        <button id="newAssessment" class="btnPrimary">+ Nové hodnocení</button>
+        <button id="duplicateAssessment">Duplikovat strukturu</button>
+        <button id="exportBtn">Export JSON</button>
+        <label for="importFile" class="small">Import</label>
+        <input id="importFile" type="file" accept="application/json" />
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2 style="margin:0 0 8px">Historie průchodů</h2>
+        <div style="display:grid;gap:8px;margin-bottom:8px">
+          <label class="small">Název průchodu</label>
+          <input id="assessmentTitle" type="text" placeholder="Např. Q1 2026" />
+          <label class="small">Datum vyplnění</label>
+          <input id="assessmentDate" type="date" />
+          <label class="small">Další review</label>
+          <input id="nextReviewDate" type="date" />
+          <button id="plusQuarter">+3 měsíce</button>
+        </div>
+        <div class="history" id="historyList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="chartWrap">
+          <div>
+            <canvas id="wheelCanvas" width="560" height="560" aria-label="Wheel chart"></canvas>
+            <div class="legend" style="margin-top:8px">
+              <span><i class="dot" style="background:#7bc1ff"></i>Aktuální</span>
+              <span><i class="dot" style="background:#ffd27b"></i>Srovnání</span>
+            </div>
+          </div>
+          <div class="targets panel" style="padding:10px">
+            <h3 style="margin:0 0 8px">Priority & cíle</h3>
+            <p class="small" style="margin-top:0">Automaticky seřazeno od nejslabších oblastí. Nastav si cílové číslo pro další scoring / konec roku.</p>
+            <table>
+              <thead><tr><th>Oblast</th><th>Skóre</th><th>Cíl</th><th>Gap</th></tr></thead>
+              <tbody id="targetsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid" id="areasGrid"></div>
+        <div class="footer">Tip: Pokud chceš méně nebo více oblastí (6-10), uprav názvy v sekci níže nebo přes export JSON.</div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'assessmentScoring.v1';
+  const defaultAreas = [
+    { name: 'Health & Wellness', items:[
+      'Pečuji o fyzické, mentální a emoční zdraví',
+      'Mám dostatek spánku',
+      'Pravidelně se hýbu',
+      'Mám energii pro běžný den'
+    ]},
+    { name: 'Personal Growth', items:[
+      'Rozvíjím dovednosti a přemýšlení',
+      'Mám čas na reflexi a plánování',
+      'Umím pracovat se stresem',
+      'Učím se nové věci'
+    ]},
+    { name: 'Finance', items:[
+      'Rozumím svým příjmům a výdajům',
+      'Budují rezervu / investice',
+      'Mám jasný finanční plán',
+      'Nežiju v dlouhodobém chaosu s penězi'
+    ]},
+    { name: 'Work & Learning', items:[
+      'Práce mi dává smysl',
+      'Posouvám se profesně',
+      'Mám zdravé pracovní hranice',
+      'Mám plán dalšího růstu'
+    ]},
+    { name: 'Family & Relationships', items:[
+      'Mám kvalitní čas s blízkými',
+      'Komunikace je otevřená a respektující',
+      'Mám zdravé hranice',
+      'Cítím podporu a sounáležitost'
+    ]},
+    { name: 'Fun & Recreation', items:[
+      'Pravidelně odpočívám',
+      'Mám prostor na koníčky',
+      'Dopřávám si radost bez výčitek',
+      'Můj týden není jen povinnost'
+    ]},
+    { name: 'Physical Environment', items:[
+      'Domov/pracoviště jsou funkční a příjemné',
+      'Mám pořádek v okolí',
+      'Řeším průběžně údržbu a opravy',
+      'Prostředí mě podporuje'
+    ]},
+    { name: 'Purpose & Vision', items:[
+      'Vím, kam směřuji',
+      'Mám hodnoty převedené do konkrétních kroků',
+      'Postupuji podle priorit',
+      'Vím, co chci mít hotové do konce roku'
+    ]}
+  ];
+
+  const els = {
+    historyList: document.getElementById('historyList'),
+    areasGrid: document.getElementById('areasGrid'),
+    targetsBody: document.getElementById('targetsBody'),
+    wheelCanvas: document.getElementById('wheelCanvas'),
+    title: document.getElementById('assessmentTitle'),
+    date: document.getElementById('assessmentDate'),
+    nextReviewDate: document.getElementById('nextReviewDate'),
+    newAssessment: document.getElementById('newAssessment'),
+    duplicateAssessment: document.getElementById('duplicateAssessment'),
+    plusQuarter: document.getElementById('plusQuarter'),
+    exportBtn: document.getElementById('exportBtn'),
+    importFile: document.getElementById('importFile')
+  };
+
+  let state = loadState();
+
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+  function blankAssessment(from){
+    const sourceAreas = from?.areas || defaultAreas;
+    return {
+      id: uid(),
+      title: from ? `${from.title || 'Copy'} (new)` : `Scoring ${todayISO()}`,
+      date: todayISO(),
+      nextReviewDate: '',
+      areas: sourceAreas.map(a => ({
+        name: a.name,
+        items: a.items.map(t => ({ text: typeof t === 'string' ? t : t.text, value: null })),
+        target: a.target || 8
+      }))
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){
+        const first = blankAssessment();
+        const init = { assessments:[first], selectedId:first.id };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
+        return init;
+      }
+      const parsed = JSON.parse(raw);
+      if(!parsed.assessments?.length) throw new Error('invalid');
+      return parsed;
+    }catch(_){
+      const first = blankAssessment();
+      return { assessments:[first], selectedId:first.id };
+    }
+  }
+
+  function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  function selected(){ return state.assessments.find(a => a.id === state.selectedId) || state.assessments[0]; }
+
+  function calcAreaScore(area){
+    const nums = area.items.map(i => Number(i.value)).filter(v => Number.isFinite(v));
+    if(!nums.length) return 0;
+    return +(nums.reduce((a,b)=>a+b,0) / nums.length).toFixed(1);
+  }
+
+  function comparisonAssessment(){
+    const ordered = [...state.assessments].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+    const idx = ordered.findIndex(a => a.id === state.selectedId);
+    return idx > 0 ? ordered[idx-1] : null;
+  }
+
+  function renderHistory(){
+    els.historyList.innerHTML = '';
+    const ordered = [...state.assessments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    for(const a of ordered){
+      const btn = document.createElement('button');
+      btn.className = a.id === state.selectedId ? 'active' : '';
+      const avg = (a.areas.reduce((s,x)=>s+calcAreaScore(x),0) / a.areas.length).toFixed(1);
+      btn.innerHTML = `<strong>${escapeHtml(a.title || 'Bez názvu')}</strong><br><span class="small">${a.date || 'bez data'} · průměr ${avg}</span>`;
+      btn.onclick = () => { state.selectedId = a.id; persist(); render(); };
+      els.historyList.appendChild(btn);
+    }
+  }
+
+  function renderEditor(){
+    const cur = selected();
+    els.title.value = cur.title || '';
+    els.date.value = cur.date || '';
+    els.nextReviewDate.value = cur.nextReviewDate || '';
+    els.areasGrid.innerHTML = '';
+
+    cur.areas.forEach((area, areaIdx) => {
+      const card = document.createElement('article');
+      card.className = 'area';
+      const score = calcAreaScore(area);
+      card.innerHTML = `<div class="areaHead">
+          <h3 contenteditable="true" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+          <span class="chip">Skóre: <strong>${score}</strong>/10</span>
+        </div>`;
+
+      area.items.forEach((item, itemIdx) => {
+        const row = document.createElement('label');
+        row.className = 'itemRow';
+        row.innerHTML = `
+          <span contenteditable="true" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
+          <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />`;
+        const num = row.querySelector('input');
+        num.oninput = () => {
+          const v = num.value === '' ? null : Math.min(10, Math.max(1, Number(num.value)));
+          cur.areas[areaIdx].items[itemIdx].value = Number.isFinite(v) ? v : null;
+          persist();
+          render();
+        };
+        card.appendChild(row);
+      });
+
+      const meta = document.createElement('div');
+      meta.className = 'itemRow';
+      meta.innerHTML = `<span class="small">Cílové číslo pro další review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" />`;
+      meta.querySelector('input').oninput = (e)=>{
+        const v = Number(e.target.value);
+        area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
+        persist();
+        renderTargets();
+      };
+      card.appendChild(meta);
+
+      els.areasGrid.appendChild(card);
+    });
+
+    els.areasGrid.querySelectorAll('[contenteditable=true]').forEach(el => {
+      el.addEventListener('blur', () => {
+        const ai = Number(el.dataset.ai);
+        if(el.dataset.role === 'name') cur.areas[ai].name = el.textContent.trim() || cur.areas[ai].name;
+        if(el.dataset.role === 'item'){
+          const ii = Number(el.dataset.ii);
+          cur.areas[ai].items[ii].text = el.textContent.trim() || cur.areas[ai].items[ii].text;
+        }
+        persist();
+        render();
+      });
+    });
+
+    els.title.oninput = ()=>{ cur.title = els.title.value; persist(); renderHistory(); };
+    els.date.oninput = ()=>{ cur.date = els.date.value; persist(); renderHistory(); renderChart(); };
+    els.nextReviewDate.oninput = ()=>{ cur.nextReviewDate = els.nextReviewDate.value; persist(); renderHistory(); };
+  }
+
+  function renderTargets(){
+    const cur = selected();
+    const rows = cur.areas.map(a => {
+      const score = calcAreaScore(a);
+      const target = Number(a.target || 0);
+      return { name:a.name, score, target, gap:+(target - score).toFixed(1) };
+    }).sort((a,b)=>a.score-b.score);
+
+    els.targetsBody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.score}</td>
+        <td>${r.target || '-'}</td>
+        <td style="color:${r.gap>0?'var(--accent2)':(r.gap<0?'var(--ok)':'var(--muted)')}">${r.gap>0?'+':''}${r.gap || 0}</td>
+      </tr>`).join('');
+  }
+
+  function renderChart(){
+    const cur = selected();
+    const compare = comparisonAssessment();
+    const ctx = els.wheelCanvas.getContext('2d');
+    const W = els.wheelCanvas.width, H = els.wheelCanvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    const cx = W/2, cy = H/2, radius = Math.min(W,H)*0.34;
+    const n = cur.areas.length;
+    const rings = 10;
+
+    ctx.strokeStyle = 'rgba(255,255,255,.17)';
+    ctx.lineWidth = 1;
+    for(let r=1;r<=rings;r++){
+      const rr = radius * (r/rings);
+      ctx.beginPath();
+      for(let i=0;i<n;i++){
+        const a = -Math.PI/2 + i*(Math.PI*2/n);
+        const x = cx + Math.cos(a)*rr;
+        const y = cy + Math.sin(a)*rr;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    for(let i=0;i<n;i++){
+      const a = -Math.PI/2 + i*(Math.PI*2/n);
+      const x = cx + Math.cos(a)*radius;
+      const y = cy + Math.sin(a)*radius;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y); ctx.stroke();
+      const labelRadius = radius + 36;
+      const lx = cx + Math.cos(a)*labelRadius;
+      const ly = cy + Math.sin(a)*labelRadius;
+      ctx.fillStyle = 'rgba(232,236,242,.95)';
+      ctx.font = '15px system-ui';
+      const label = `${String(i+1).padStart(2,'0')} ${cur.areas[i].name}`;
+      const m = ctx.measureText(label);
+      ctx.fillText(label, lx - m.width/2, ly);
+    }
+
+    drawDataset(cur.areas.map(calcAreaScore), '#7bc1ff', 'rgba(123,193,255,.22)', true);
+    if(compare){
+      const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
+      drawDataset(cur.areas.map(a => map.get(a.name) || 0), '#ffd27b', 'rgba(255,210,123,.16)', false);
+    }
+
+    function drawDataset(values, stroke, fill, points){
+      ctx.beginPath();
+      values.forEach((v,i) => {
+        const rr = radius * (Math.max(0, Math.min(10, v))/10);
+        const a = -Math.PI/2 + i*(Math.PI*2/n);
+        const x = cx + Math.cos(a)*rr;
+        const y = cy + Math.sin(a)*rr;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+
+      if(points){
+        values.forEach((v,i) => {
+          const rr = radius * (Math.max(0, Math.min(10, v))/10);
+          const a = -Math.PI/2 + i*(Math.PI*2/n);
+          const x = cx + Math.cos(a)*rr;
+          const y = cy + Math.sin(a)*rr;
+          ctx.beginPath();
+          ctx.arc(x,y,11,0,Math.PI*2);
+          ctx.fillStyle = '#0f1117';
+          ctx.fill();
+          ctx.strokeStyle = stroke;
+          ctx.stroke();
+          ctx.fillStyle = stroke;
+          ctx.font = '12px system-ui';
+          const txt = String(v || 0);
+          const m = ctx.measureText(txt);
+          ctx.fillText(txt, x-m.width/2, y+4);
+        });
+      }
+    }
+  }
+
+  function exportData(){
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `assessment-scoring-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData(file){
+    const r = new FileReader();
+    r.onload = () => {
+      try{
+        const parsed = JSON.parse(String(r.result));
+        if(!parsed.assessments?.length) throw new Error('Neplatný JSON');
+        state = parsed;
+        if(!state.selectedId) state.selectedId = state.assessments[0].id;
+        persist();
+        render();
+      }catch(e){ alert('Import selhal: ' + e.message); }
+    };
+    r.readAsText(file);
+  }
+
+  function escapeHtml(text){
+    return String(text)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;');
+  }
+
+  function addMonths(dateISO, m){
+    const d = new Date(dateISO || todayISO());
+    d.setMonth(d.getMonth() + m);
+    return d.toISOString().slice(0,10);
+  }
+
+  function render(){
+    renderHistory();
+    renderEditor();
+    renderTargets();
+    renderChart();
+  }
+
+  els.newAssessment.onclick = () => {
+    const next = blankAssessment();
+    state.assessments.push(next);
+    state.selectedId = next.id;
+    persist();
+    render();
+  };
+
+  els.duplicateAssessment.onclick = () => {
+    const next = blankAssessment(selected());
+    state.assessments.push(next);
+    state.selectedId = next.id;
+    persist();
+    render();
+  };
+
+  els.plusQuarter.onclick = () => {
+    const cur = selected();
+    cur.nextReviewDate = addMonths(cur.date || todayISO(), 3);
+    persist();
+    render();
+  };
+
+  els.exportBtn.onclick = exportData;
+  els.importFile.onchange = () => {
+    const f = els.importFile.files?.[0];
+    if(f) importData(f);
+    els.importFile.value = '';
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
