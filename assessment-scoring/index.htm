@@ -671,17 +671,36 @@
 
     function createAreaGradient(run, x, y, r, alpha){
       const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
-      const gradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-      if(!colors.length){
-        gradient.addColorStop(0, alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR);
-        gradient.addColorStop(1, alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR);
+      if(typeof ctx.createConicGradient === 'function'){
+        const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
+        if(!colors.length){
+          const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+          gradient.addColorStop(0, fallback);
+          gradient.addColorStop(1, fallback);
+          return gradient;
+        }
+        colors.forEach((color, idx) => {
+          const from = idx / colors.length;
+          const to = (idx + 1) / colors.length;
+          const c = alpha ? hexToRgba(color, alpha) : color;
+          gradient.addColorStop(from, c);
+          gradient.addColorStop(to, c);
+        });
         return gradient;
+      }
+
+      const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+      if(!colors.length){
+        const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+        fallbackGradient.addColorStop(0, fallback);
+        fallbackGradient.addColorStop(1, fallback);
+        return fallbackGradient;
       }
       colors.forEach((color, idx) => {
         const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
-        gradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
+        fallbackGradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
       });
-      return gradient;
+      return fallbackGradient;
     }
 
     function hexToRgba(hex, alpha){
