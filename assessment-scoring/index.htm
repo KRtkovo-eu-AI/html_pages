@@ -563,8 +563,10 @@
       if(areaColorInput){
         areaColorInput.oninput = () => {
           area.comparisonColor = areaColorInput.value || DEFAULT_AREA_COMPARISON_COLOR;
+          if(areaTitle) areaTitle.style.color = area.comparisonColor;
           persist();
           updateColorUI();
+          renderTargets();
           renderChart();
         };
       }
