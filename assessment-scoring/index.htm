@@ -63,9 +63,12 @@
     .areaBody{display:block}
     .area h3{margin:0;font-size:16px}
     .chip{font-size:12px;color:var(--muted)}
-    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,300px) auto;gap:8px;align-items:center;margin:7px 0}
+    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto;gap:8px;align-items:center;margin:7px 0}
     .sliderWrap{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
-    .sliderWrap input[type='range']{width:100%;padding:0}
+    .sliderWrap input[type='range']{width:100%;padding:0;appearance:none;height:8px;border-radius:999px;background:linear-gradient(90deg,#8b5cf6 0%,#22c55e 100%);border:none}
+    .sliderWrap input[type='range']::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgba(15,17,23,.45);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+    .sliderWrap input[type='range']::-moz-range-track{height:8px;border-radius:999px;background:linear-gradient(90deg,#8b5cf6 0%,#22c55e 100%);border:none}
+    .sliderWrap input[type='range']::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgba(15,17,23,.45);box-shadow:0 1px 4px rgba(0,0,0,.35)}
     .sliderScale{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
     .sliderValue{font-size:12px;color:var(--accent);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
     .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
@@ -89,7 +92,7 @@
     <div class="top">
       <div>
         <h1>Assessment Scoring</h1>
-        <p class="sub">Rate each area on a 1-10 slider (1 = mess, 5 = not great not terrible, 10 = complete satisfaction). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
+        <p class="sub">Rate each area on a 1-10 slider (1 = mess, 10 = satisfied). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
       </div>
       <div class="toolbar panel">
         <button id="newAssessment" class="btnPrimary">+ New assessment</button>
@@ -383,7 +386,7 @@
           <div class="sliderWrap">
             <input type="range" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : 5}" data-ai="${areaIdx}" data-ii="${itemIdx}" aria-label="Score from 1 to 10" />
             <span class="sliderValue">${Number.isFinite(item.value) ? item.value : '—'}</span>
-            <div class="sliderScale"><span>1 · mess</span><span>5 · not great not terrible</span><span>10 · complete satisfaction</span></div>
+            <div class="sliderScale"><span>1 - mess</span><span>10 - satisfied</span></div>
           </div>
           <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
 
