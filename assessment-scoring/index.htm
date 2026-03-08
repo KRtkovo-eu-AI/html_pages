@@ -58,6 +58,9 @@
     @media (max-width:860px){.grid{grid-template-columns:1fr}}
     .area{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(0,0,0,.18)}
     .areaHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+    .areaTitleWrap{display:flex;align-items:center;gap:8px;min-width:0}
+    .areaToggle{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:0;font-size:16px}
+    .areaBody{display:block}
     .area h3{margin:0;font-size:16px}
     .chip{font-size:12px;color:var(--muted)}
     .itemRow{display:grid;grid-template-columns:minmax(0,1fr) 82px auto;gap:8px;align-items:center;margin:7px 0}
@@ -285,17 +288,18 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS } };
+        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {} } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { ...DEFAULT_COLORS, ...(parsed.settings || {}) };
+      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, ...(parsed.settings || {}) };
+      if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS } };
+      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {} } };
     }
   }
 
@@ -330,6 +334,7 @@
 
   function renderEditor(){
     const cur = selected();
+    if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
     els.title.value = cur.title || '';
     els.date.value = cur.date || '';
     els.nextReviewDate.value = cur.nextReviewDate || '';
@@ -342,13 +347,21 @@
       const card = document.createElement('article');
       card.className = 'area';
       const score = calcAreaScore(area);
+      const collapseKey = `${cur.id}:${areaIdx}`;
+      const isCollapsed = !!state.settings.collapsed[collapseKey];
       card.innerHTML = `<div class="areaHead">
-          <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+          <div class="areaTitleWrap">
+            <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
+            <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+          </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
             <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
           </div>
         </div>`;
+
+      const body = document.createElement('div');
+      body.className = `areaBody ${isCollapsed ? 'hidden' : ''}`;
 
       area.items.forEach((item, itemIdx) => {
         const row = document.createElement('label');
@@ -381,7 +394,7 @@
           render();
         };
 
-        card.appendChild(row);
+        body.appendChild(row);
       });
 
       const addRow = document.createElement('button');
@@ -394,7 +407,7 @@
         persist();
         render();
       };
-      card.appendChild(addRow);
+      body.appendChild(addRow);
 
       const meta = document.createElement('div');
       meta.className = 'itemRow';
@@ -405,7 +418,13 @@
         persist();
         renderTargets();
       };
-      card.appendChild(meta);
+      body.appendChild(meta);
+
+      card.querySelector('[data-action="toggleArea"]').onclick = () => {
+        state.settings.collapsed[collapseKey] = !state.settings.collapsed[collapseKey];
+        persist();
+        renderEditor();
+      };
 
       card.querySelector('[data-action="deleteArea"]').onclick = () => {
         if(!isEditMode) return;
@@ -415,10 +434,15 @@
         }
         if(!confirm(`Delete area "${cur.areas[areaIdx].name}"?`)) return;
         cur.areas.splice(areaIdx, 1);
+        // cleanup obsolete collapse keys for this run
+        Object.keys(state.settings.collapsed)
+          .filter(k => k.startsWith(cur.id + ':'))
+          .forEach(k => delete state.settings.collapsed[k]);
         persist();
         render();
       };
 
+      card.appendChild(body);
       els.areasGrid.appendChild(card);
     });
 
