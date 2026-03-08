@@ -135,8 +135,6 @@
               <span><i class="dot" id="comparisonDot"></i>Comparison</span>
               <div class="legendControls">
                 <span class="small">Drag chart corner to resize width & height</span>
-                <label class="small">Current color <input id="currentColor" type="color" /></label>
-                <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
               </div>
             </div>
           </div>
@@ -166,7 +164,8 @@
 <script>
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
-  const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
+  const CURRENT_GRADIENT = ['#8b5cf6', '#22c55e'];
+  const DEFAULT_AREA_COMPARISON_COLOR = '#ffd27b';
   const DEFAULT_CHART_SIZE = 780;
   const DEFAULT_CHART_WIDTH = 780;
   const DEFAULT_CHART_HEIGHT = 780;
@@ -263,8 +262,6 @@
     wheelCanvas: document.getElementById('wheelCanvas'),
     currentDot: document.getElementById('currentDot'),
     comparisonDot: document.getElementById('comparisonDot'),
-    currentColor: document.getElementById('currentColor'),
-    comparisonColor: document.getElementById('comparisonColor'),
     title: document.getElementById('assessmentTitle'),
     date: document.getElementById('assessmentDate'),
     nextReviewDate: document.getElementById('nextReviewDate'),
@@ -295,7 +292,8 @@
       areas: sourceAreas.map(a => ({
         name: a.name,
         items: a.items.map(t => ({ text: typeof t === 'string' ? t : t.text, value: null })),
-        target: a.target || 8
+        target: a.target || 8,
+        comparisonColor: a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR
       }))
     };
   }
@@ -305,20 +303,23 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+      parsed.assessments.forEach(a => a.areas?.forEach(area => {
+        if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
+      }));
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
     }
   }
 
@@ -326,8 +327,13 @@
 
   function selected(){ return state.assessments.find(a => a.id === state.selectedId) || state.assessments[0]; }
 
+  function scoreValue(raw){
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+  }
+
   function calcAreaScore(area){
-    const nums = area.items.map(i => Number(i.value)).filter(v => Number.isFinite(v));
+    const nums = area.items.map(i => scoreValue(i.value)).filter(v => v !== null);
     if(!nums.length) return 0;
     return +(nums.reduce((a,b)=>a+b,0) / nums.length).toFixed(1);
   }
@@ -339,7 +345,7 @@
   }
 
   function isAreaComplete(area){
-    return area.items.every(item => Number.isFinite(Number(item.value)));
+    return area.items.length > 0 && area.items.every(item => scoreValue(item.value) !== null);
   }
 
   function renderHistory(){
@@ -381,6 +387,7 @@
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
             ${areaComplete ? '<span class="areaDone" title="Area completed" aria-label="Area completed">✔</span>' : ''}
+            <label class="small">Area color <input type="color" data-action="areaColor" data-ai="${areaIdx}" value="${area.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR}" /></label>
             <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
           </div>
         </div>`;
@@ -408,6 +415,7 @@
           sliderValue.textContent = Number.isFinite(v) ? String(v) : '—';
           persist();
           updateAreaScore(areaIdx);
+          updateAreaCompletion(areaIdx);
           renderTargets();
           renderChart();
           renderHistory();
@@ -466,6 +474,16 @@
         renderEditor();
       };
 
+      const areaColorInput = card.querySelector('[data-action="areaColor"]');
+      if(areaColorInput){
+        areaColorInput.oninput = () => {
+          area.comparisonColor = areaColorInput.value || DEFAULT_AREA_COMPARISON_COLOR;
+          persist();
+          updateColorUI();
+          renderChart();
+        };
+      }
+
       card.querySelector('[data-action="deleteArea"]').onclick = () => {
         if(!isEditMode) return;
         if(cur.areas.length <= 1){
@@ -512,6 +530,27 @@
     if(!card) return;
     const scoreEl = card.querySelector('.chip strong');
     if(scoreEl) scoreEl.textContent = String(calcAreaScore(cur.areas[areaIdx]));
+  }
+
+  function updateAreaCompletion(areaIdx){
+    const cur = selected();
+    const card = els.areasGrid.children[areaIdx];
+    if(!card) return;
+    const actions = card.querySelector('.areaActions');
+    if(!actions) return;
+    const existing = actions.querySelector('.areaDone');
+    const complete = isAreaComplete(cur.areas[areaIdx]);
+    if(complete && !existing){
+      const badge = document.createElement('span');
+      badge.className = 'areaDone';
+      badge.title = 'Area completed';
+      badge.setAttribute('aria-label', 'Area completed');
+      badge.textContent = '✔';
+      const deleteBtn = actions.querySelector('[data-action="deleteArea"]');
+      if(deleteBtn) actions.insertBefore(badge, deleteBtn);
+      else actions.appendChild(badge);
+    }
+    if(!complete && existing) existing.remove();
   }
 
   function renderTargets(){
@@ -564,12 +603,13 @@
   }
 
   function updateColorUI(){
-    const current = state.settings?.current || DEFAULT_COLORS.current;
-    const comparison = state.settings?.comparison || DEFAULT_COLORS.comparison;
-    if(els.currentDot) els.currentDot.style.background = current;
-    if(els.comparisonDot) els.comparisonDot.style.background = comparison;
-    if(els.currentColor) els.currentColor.value = current;
-    if(els.comparisonColor) els.comparisonColor.value = comparison;
+    if(els.currentDot) els.currentDot.style.background = `linear-gradient(90deg, ${CURRENT_GRADIENT[0]} 0%, ${CURRENT_GRADIENT[1]} 100%)`;
+    const cur = selected();
+    const areaColors = (cur?.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+    const comparisonGradient = areaColors.length
+      ? `linear-gradient(90deg, ${areaColors.join(', ')})`
+      : DEFAULT_AREA_COMPARISON_COLOR;
+    if(els.comparisonDot) els.comparisonDot.style.background = comparisonGradient;
   }
 
   function renderChart(){
@@ -613,16 +653,38 @@
       ctx.fillText(label, lx - m.width/2, ly);
     }
 
-    const currentColor = state.settings?.current || DEFAULT_COLORS.current;
-    const comparisonColor = state.settings?.comparison || DEFAULT_COLORS.comparison;
+    const currentStroke = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    currentStroke.addColorStop(0, CURRENT_GRADIENT[0]);
+    currentStroke.addColorStop(1, CURRENT_GRADIENT[1]);
+    const currentFill = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    currentFill.addColorStop(0, 'rgba(139,92,246,0.22)');
+    currentFill.addColorStop(1, 'rgba(34,197,94,0.22)');
 
-    drawDataset(cur.areas.map(calcAreaScore), currentColor, colorToFill(currentColor, 0.22), true);
+    drawDataset(cur.areas.map(calcAreaScore), currentStroke, currentFill, true);
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
-      drawDataset(cur.areas.map(a => map.get(a.name) || 0), comparisonColor, colorToFill(comparisonColor, 0.16), false);
+      const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
+      const comparisonStroke = createAreaGradient(cur, cx, cy, radius);
+      const comparisonFill = createAreaGradient(cur, cx, cy, radius, 0.16);
+      drawDataset(comparisonValues, comparisonStroke, comparisonFill, false);
     }
 
-    function colorToFill(hex, alpha){
+    function createAreaGradient(run, x, y, r, alpha){
+      const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+      const gradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+      if(!colors.length){
+        gradient.addColorStop(0, alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR);
+        gradient.addColorStop(1, alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR);
+        return gradient;
+      }
+      colors.forEach((color, idx) => {
+        const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
+        gradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
+      });
+      return gradient;
+    }
+
+    function hexToRgba(hex, alpha){
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
       if(!m) return `rgba(255,255,255,${alpha})`;
       const r = parseInt(m[1], 16);
@@ -659,7 +721,7 @@
           ctx.fill();
           ctx.strokeStyle = stroke;
           ctx.stroke();
-          ctx.fillStyle = stroke;
+          ctx.fillStyle = '#e8ecf2';
           ctx.font = '12px system-ui';
           const txt = String(v || 0);
           const m = ctx.measureText(txt);
@@ -686,10 +748,13 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
+        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
         if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
         if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+        state.assessments.forEach(a => a.areas?.forEach(area => {
+          if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
+        }));
         if(!state.selectedId) state.selectedId = state.assessments[0].id;
         persist();
         render();
@@ -777,7 +842,8 @@
         { text:'New prompt 3', value:null },
         { text:'New prompt 4', value:null }
       ],
-      target: 8
+      target: 8,
+      comparisonColor: DEFAULT_AREA_COMPARISON_COLOR
     });
     persist();
     render();
@@ -790,19 +856,6 @@
     render();
   };
 
-  els.currentColor.oninput = () => {
-    state.settings.current = els.currentColor.value;
-    persist();
-    updateColorUI();
-    renderChart();
-  };
-
-  els.comparisonColor.oninput = () => {
-    state.settings.comparison = els.comparisonColor.value;
-    persist();
-    updateColorUI();
-    renderChart();
-  };
 
   els.exportBtn.onclick = exportData;
   els.importFile.onchange = () => {
