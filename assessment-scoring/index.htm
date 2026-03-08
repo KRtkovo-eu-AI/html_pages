@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assessment Scoring</title>
+  <style>
+    :root{
+      --bg:#0f1117;
+      --panel:#171b24;
+      --line:#293040;
+      --text:#e8ecf2;
+      --muted:#9ca6b8;
+      --accent:#7bc1ff;
+      --accent2:#ffd27b;
+      --danger:#ff7f7f;
+      --ok:#87e3a2;
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text);
+      background:radial-gradient(1100px 700px at 20% -10%,#1e2940 0,transparent 55%),var(--bg);
+    }
+    .wrap{max-width:1240px;margin:24px auto;padding:0 16px 40px}
+    .top{
+      display:flex;flex-wrap:wrap;gap:12px 16px;justify-content:space-between;align-items:flex-end;margin-bottom:14px;
+    }
+    h1{margin:0;font-size:28px}
+    .sub{margin:6px 0 0;color:var(--muted);max-width:80ch;line-height:1.45}
+    .panel{
+      background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:var(--radius);
+      padding:14px;
+    }
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    button,input,select,textarea{
+      font:inherit;color:var(--text);
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:10px;
+      padding:8px 10px;
+    }
+    button{cursor:pointer}
+    button:hover{background:rgba(255,255,255,.1)}
+    .btnPrimary{background:rgba(123,193,255,.14);border-color:rgba(123,193,255,.35)}
+    .btnDanger{background:rgba(255,127,127,.12);border-color:rgba(255,127,127,.35)}
+    .layout{display:grid;grid-template-columns:320px 1fr;gap:12px}
+    @media (max-width:1000px){.layout{grid-template-columns:1fr}}
+    .history{display:flex;flex-direction:column;gap:8px;max-height:68vh;overflow:auto;padding-right:4px}
+    .history button{text-align:left;width:100%}
+    .history button.active{border-color:var(--accent);background:rgba(123,193,255,.12)}
+    .muted{color:var(--muted)}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .area{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(0,0,0,.18)}
+    .areaHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
+    .areaTitleWrap{display:flex;align-items:center;gap:8px;min-width:0}
+    .areaToggle{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:0;font-size:16px}
+    .areaBody{display:block}
+    .area h3{margin:0;font-size:16px}
+    .chip{font-size:12px;color:var(--muted)}
+    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) 82px auto;gap:8px;align-items:center;margin:7px 0}
+    .itemRow input[type='number']{width:82px}
+    .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
+    .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
+    .areaActions{display:flex;gap:8px;align-items:center}
+    .hidden{display:none !important}
+    .small{font-size:12px;color:var(--muted)}
+    .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
+    .chartSizer{resize:both;overflow:auto;width:780px;height:780px;max-width:100%;margin:0 auto;border:1px dashed rgba(255,255,255,.2);border-radius:12px;padding:2px}
+    canvas{display:block;width:100%;height:100%;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:10px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center;justify-content:center}
+    .legendControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+    .targets table{width:100%;border-collapse:collapse;font-size:13px}
+    .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+    .footer{margin-top:12px;font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>Assessment Scoring</h1>
+        <p class="sub">Rate each area from 1-10 (10 = maximum satisfaction). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
+      </div>
+      <div class="toolbar panel">
+        <button id="newAssessment" class="btnPrimary">+ New assessment</button>
+        <button id="duplicateAssessment">Duplicate structure</button>
+        <button id="deleteAssessment" class="btnDanger">Delete run</button>
+        <button id="resetValues">Reset values</button>
+        <button id="toggleEdit">Edit assessment</button>
+        <button id="exportBtn">Export JSON</button>
+        <label for="importFile" class="small">Import</label>
+        <input id="importFile" type="file" accept="application/json" />
+      </div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2 style="margin:0 0 8px">Run history</h2>
+        <div style="display:grid;gap:8px;margin-bottom:8px">
+          <label class="small">Run title</label>
+          <input id="assessmentTitle" type="text" placeholder="e.g. Q1 2026" />
+          <label class="small">Assessment date</label>
+          <input id="assessmentDate" type="date" />
+          <label class="small">Next review</label>
+          <input id="nextReviewDate" type="date" />
+          <button id="plusQuarter">+3 months</button>
+        </div>
+        <div class="history" id="historyList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="chartWrap">
+          <div>
+            <h3 style="margin:0 0 8px">Wheel of Life</h3>
+            <div id="chartSizer" class="chartSizer"><canvas id="wheelCanvas" width="780" height="780" aria-label="Wheel chart"></canvas></div>
+            <div class="legend" style="margin-top:8px">
+              <span><i class="dot" id="currentDot"></i>Current</span>
+              <span><i class="dot" id="comparisonDot"></i>Comparison</span>
+              <div class="legendControls">
+                <span class="small">Drag chart corner to resize width & height</span>
+                <label class="small">Current color <input id="currentColor" type="color" /></label>
+                <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
+              </div>
+            </div>
+          </div>
+          <div class="targets panel" style="padding:10px">
+            <h3 style="margin:0 0 8px">Priorities & targets</h3>
+            <p class="small" style="margin-top:0">Automatically sorted from lowest-scoring areas. Set your target score for the next assessment or end-of-year checkpoint.</p>
+            <table>
+              <thead><tr><th>#</th><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
+              <tbody id="targetsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="grid" id="areasGrid"></div>
+        <section class="panel" style="margin-top:12px">
+          <h3 style="margin:0 0 8px">Area management (6-10 recommended)</h3>
+          <p class="small" style="margin:0 0 8px">Switch to Edit mode to change area names/prompts, add rows, or delete areas. In default mode these actions are locked to avoid accidental changes.</p>
+          <div class="toolbar">
+            <button id="addArea">+ Add area</button>
+          </div>
+        </section>
+        <div class="footer">Tip: Keeping 6-10 areas works best. You can rename and adjust each one over time.</div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'assessmentScoring.v1';
+  const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
+  const DEFAULT_CHART_SIZE = 780;
+  const DEFAULT_CHART_WIDTH = 780;
+  const DEFAULT_CHART_HEIGHT = 780;
+  const defaultAreas = [
+    { name: 'Personal', items:[
+      'My basic needs are taken care of.',
+      'I generally feel happy and fulfilled.',
+      'I have a positive attitude and outlook on life.',
+      'I give myself grace for my limits and imperfections.',
+      'I regularly take time for life planning, reflection, and self-care.',
+      'I am comfortable spending time alone.',
+      'There are hobbies and interests I engage in regularly.',
+      'There are personal goals or projects that I want to achieve/complete.'
+    ]},
+    { name: 'Fun & Recreation', items:[
+      'I take regularly planned vacations and/or time off.',
+      'I create moments for rest and rejuvenation.',
+      'I give myself permission to have fun without feeling guilty.',
+      'I have fun in ways that serve my highest and best self.',
+      'I reward myself when I accomplish a goal.',
+      'I do things on a regular basis that bring me joy.',
+      'I spend enough time with people I enjoy.',
+      'My social interactions are enjoyable, meaningful, and fun.'
+    ]},
+    { name: 'Work & Learning', items:[
+      "I am enthusiastic and engaged by what I'm doing for my life's work.",
+      'I am fulfilled by the work I do and believe it adds value.',
+      'My work is a true fit for my purpose, strengths, and personal gifts.',
+      'I am contributing to the work the way I desire.',
+      'I have positive interactions at work.',
+      'I expand my skills through continued growth and development.',
+      'I have an actionable plan to support the growth and success I desire.',
+      'I am curious and eager to learn.'
+    ]},
+    { name: 'Family & Relationships', items:[
+      'I am present with my family, friends, and/or significant other.',
+      'I share mutual love, respect, and appreciation with my loved ones.',
+      'I have healthy boundaries.',
+      'I am free from toxic relationships.',
+      'I experience vulnerability and intimacy in my personal relationships.',
+      'I have a sense of community and belonging where I live, work, and play.',
+      'I have clarity and peace in the areas I feel like I am lacking.',
+      'I am actively designing what I want from my relationships.'
+    ]},
+    { name: 'Health & Wellness', items:[
+      'I take care of my physical, mental, and emotional health.',
+      'I eat well and drink plenty of water.',
+      'I get a sufficient amount of sleep.',
+      'I have a regular exercise routine.',
+      'I have a healthy self-image.',
+      "I have healed from any stress or trauma I've experienced.",
+      'I feel strong in body, heart, and mind.',
+      "I'm equipped to handle life's events with strength and vitality."
+    ]},
+    { name: 'Spiritual & Personal Growth', items:[
+      'I have identified what my own definition of spirituality is.',
+      'I engage in regular spiritual practice.',
+      'I invest time and energy into my personal and spiritual growth.',
+      'My words, thoughts, and actions are congruent with my beliefs and values.',
+      'I seek to learn new things about myself and others.',
+      'I feel clear and connected to what my guiding principles are.',
+      'I practice gratitude regularly.',
+      'I have found peace and forgiveness where there has been pain and suffering.'
+    ]},
+    { name: 'Financial', items:[
+      'I have financial and economic security.',
+      'I have a healthy relationship with money.',
+      'I spend my money responsibly and live within my means.',
+      'I have a financial plan for the future and contribute to it regularly.',
+      'I believe in my ability to acquire wealth.',
+      'I am implementing the systems and skills needed to meet my financial goals.',
+      'I have streamlined and automated my financial dealings.',
+      'I have a favorable credit rating.'
+    ]},
+    { name: 'Physical Environment', items:[
+      'My home, car, and workplace are clean and safe.',
+      'My physical environment is free from clutter and excess.',
+      'I enjoy spending time in my personal spaces.',
+      'I feel organized.',
+      'I am up-to-date on necessary repairs and maintenance.',
+      'There are physical areas where I can go to recharge and experience comfort.',
+      'My environments support having positive energy, good habits, and personal success.',
+      'I feel supported in the management of my home.'
+    ]}
+  ];
+
+
+
+  const els = {
+    historyList: document.getElementById('historyList'),
+    areasGrid: document.getElementById('areasGrid'),
+    targetsBody: document.getElementById('targetsBody'),
+    chartSizer: document.getElementById('chartSizer'),
+    wheelCanvas: document.getElementById('wheelCanvas'),
+    currentDot: document.getElementById('currentDot'),
+    comparisonDot: document.getElementById('comparisonDot'),
+    currentColor: document.getElementById('currentColor'),
+    comparisonColor: document.getElementById('comparisonColor'),
+    title: document.getElementById('assessmentTitle'),
+    date: document.getElementById('assessmentDate'),
+    nextReviewDate: document.getElementById('nextReviewDate'),
+    newAssessment: document.getElementById('newAssessment'),
+    duplicateAssessment: document.getElementById('duplicateAssessment'),
+    deleteAssessment: document.getElementById('deleteAssessment'),
+    resetValues: document.getElementById('resetValues'),
+    toggleEdit: document.getElementById('toggleEdit'),
+    plusQuarter: document.getElementById('plusQuarter'),
+    exportBtn: document.getElementById('exportBtn'),
+    importFile: document.getElementById('importFile'),
+    addArea: document.getElementById('addArea')
+  };
+
+  let state = loadState();
+  let isEditMode = false;
+
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+  function blankAssessment(from){
+    const sourceAreas = from?.areas || defaultAreas;
+    return {
+      id: uid(),
+      title: from ? `${from.title || 'Copy'} (new)` : `Scoring ${todayISO()}`,
+      date: todayISO(),
+      nextReviewDate: '',
+      areas: sourceAreas.map(a => ({
+        name: a.name,
+        items: a.items.map(t => ({ text: typeof t === 'string' ? t : t.text, value: null })),
+        target: a.target || 8
+      }))
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw){
+        const first = blankAssessment();
+        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
+        return init;
+      }
+      const parsed = JSON.parse(raw);
+      if(!parsed.assessments?.length) throw new Error('invalid');
+      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
+      if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
+      if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
+      if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+      return parsed;
+    }catch(_){
+      const first = blankAssessment();
+      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+    }
+  }
+
+  function persist(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  function selected(){ return state.assessments.find(a => a.id === state.selectedId) || state.assessments[0]; }
+
+  function calcAreaScore(area){
+    const nums = area.items.map(i => Number(i.value)).filter(v => Number.isFinite(v));
+    if(!nums.length) return 0;
+    return +(nums.reduce((a,b)=>a+b,0) / nums.length).toFixed(1);
+  }
+
+  function comparisonAssessment(){
+    const ordered = [...state.assessments].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+    const idx = ordered.findIndex(a => a.id === state.selectedId);
+    return idx > 0 ? ordered[idx-1] : null;
+  }
+
+  function renderHistory(){
+    els.historyList.innerHTML = '';
+    const ordered = [...state.assessments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    for(const a of ordered){
+      const btn = document.createElement('button');
+      btn.className = a.id === state.selectedId ? 'active' : '';
+      const avg = (a.areas.reduce((s,x)=>s+calcAreaScore(x),0) / a.areas.length).toFixed(1);
+      btn.innerHTML = `<strong>${escapeHtml(a.title || 'Untitled')}</strong><br><span class="small">${a.date || 'no date'} · average ${avg}</span>`;
+      btn.onclick = () => { state.selectedId = a.id; persist(); render(); };
+      els.historyList.appendChild(btn);
+    }
+  }
+
+  function renderEditor(){
+    const cur = selected();
+    if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
+    els.title.value = cur.title || '';
+    els.date.value = cur.date || '';
+    els.nextReviewDate.value = cur.nextReviewDate || '';
+    els.areasGrid.innerHTML = '';
+    els.toggleEdit.textContent = isEditMode ? 'Done editing' : 'Edit assessment';
+    const areaManageSection = document.querySelector('#addArea')?.closest('section');
+    if(areaManageSection) areaManageSection.classList.toggle('hidden', !isEditMode);
+
+    cur.areas.forEach((area, areaIdx) => {
+      const card = document.createElement('article');
+      card.className = 'area';
+      const score = calcAreaScore(area);
+      const collapseKey = `${cur.id}:${areaIdx}`;
+      const isCollapsed = state.settings.collapsed[collapseKey] ?? true;
+      card.innerHTML = `<div class="areaHead">
+          <div class="areaTitleWrap">
+            <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
+            <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+          </div>
+          <div class="areaActions">
+            <span class="chip">Score: <strong>${score}</strong>/10</span>
+            <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
+          </div>
+        </div>`;
+
+      const body = document.createElement('div');
+      body.className = `areaBody ${isCollapsed ? 'hidden' : ''}`;
+
+      area.items.forEach((item, itemIdx) => {
+        const row = document.createElement('label');
+        row.className = 'itemRow';
+        row.innerHTML = `
+          <span class="itemText" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
+          <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />
+          <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
+
+        const num = row.querySelector('input');
+        num.oninput = () => {
+          const v = num.value === '' ? null : Math.min(10, Math.max(1, Number(num.value)));
+          cur.areas[areaIdx].items[itemIdx].value = Number.isFinite(v) ? v : null;
+          persist();
+          updateAreaScore(areaIdx);
+          renderTargets();
+          renderChart();
+          renderHistory();
+        };
+
+        const delBtn = row.querySelector('[data-action="deleteItem"]');
+        delBtn.onclick = () => {
+          if(!isEditMode) return;
+          if(cur.areas[areaIdx].items.length <= 1){
+            alert('At least one row must remain in an area.');
+            return;
+          }
+          cur.areas[areaIdx].items.splice(itemIdx, 1);
+          persist();
+          render();
+        };
+
+        body.appendChild(row);
+      });
+
+      const addRow = document.createElement('button');
+      addRow.type = 'button';
+      addRow.textContent = '+ Add row';
+      if(!isEditMode) addRow.classList.add('hidden');
+      addRow.onclick = () => {
+        if(!isEditMode) return;
+        cur.areas[areaIdx].items.push({ text: `New prompt ${cur.areas[areaIdx].items.length + 1}`, value: null });
+        persist();
+        render();
+      };
+      body.appendChild(addRow);
+
+      const meta = document.createElement('div');
+      meta.className = 'itemRow';
+      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" /><span></span>`;
+      meta.querySelector('input').oninput = (e)=>{
+        const v = Number(e.target.value);
+        area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
+        persist();
+        renderTargets();
+      };
+      body.appendChild(meta);
+
+      card.querySelector('[data-action="toggleArea"]').onclick = () => {
+        state.settings.collapsed[collapseKey] = !state.settings.collapsed[collapseKey];
+        persist();
+        renderEditor();
+      };
+
+      card.querySelector('[data-action="deleteArea"]').onclick = () => {
+        if(!isEditMode) return;
+        if(cur.areas.length <= 1){
+          alert('At least one area must remain.');
+          return;
+        }
+        if(!confirm(`Delete area "${cur.areas[areaIdx].name}"?`)) return;
+        cur.areas.splice(areaIdx, 1);
+        // cleanup obsolete collapse keys for this run
+        Object.keys(state.settings.collapsed)
+          .filter(k => k.startsWith(cur.id + ':'))
+          .forEach(k => delete state.settings.collapsed[k]);
+        persist();
+        render();
+      };
+
+      card.appendChild(body);
+      els.areasGrid.appendChild(card);
+    });
+
+    if(isEditMode){
+      els.areasGrid.querySelectorAll('[contenteditable=true]').forEach(el => {
+        el.addEventListener('blur', () => {
+          const ai = Number(el.dataset.ai);
+          if(el.dataset.role === 'name') cur.areas[ai].name = el.textContent.trim() || cur.areas[ai].name;
+          if(el.dataset.role === 'item'){
+            const ii = Number(el.dataset.ii);
+            cur.areas[ai].items[ii].text = el.textContent.trim() || cur.areas[ai].items[ii].text;
+          }
+          persist();
+          render();
+        });
+      });
+    }
+
+    els.title.oninput = ()=>{ cur.title = els.title.value; persist(); renderHistory(); };
+    els.date.oninput = ()=>{ cur.date = els.date.value; persist(); renderHistory(); renderChart(); };
+    els.nextReviewDate.oninput = ()=>{ cur.nextReviewDate = els.nextReviewDate.value; persist(); renderHistory(); };
+  }
+
+  function updateAreaScore(areaIdx){
+    const cur = selected();
+    const card = els.areasGrid.children[areaIdx];
+    if(!card) return;
+    const scoreEl = card.querySelector('.chip strong');
+    if(scoreEl) scoreEl.textContent = String(calcAreaScore(cur.areas[areaIdx]));
+  }
+
+  function renderTargets(){
+    const cur = selected();
+    const rows = cur.areas.map((a, idx) => {
+      const score = calcAreaScore(a);
+      const target = Number(a.target || 0);
+      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1) };
+    }).sort((a,b)=>a.score-b.score);
+
+    els.targetsBody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${String(r.order).padStart(2,'0')}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>${r.score}</td>
+        <td>${r.target || '-'}</td>
+        <td style="color:${r.gap>0?'var(--accent2)':(r.gap<0?'var(--ok)':'var(--muted)')}">${r.gap>0?'+':''}${r.gap || 0}</td>
+      </tr>`).join('');
+  }
+
+
+
+  function applyChartDimensions(width, height){
+    const w = Math.max(320, Math.min(1200, Math.round(Number(width) || DEFAULT_CHART_WIDTH)));
+    const h = Math.max(320, Math.min(1200, Math.round(Number(height) || DEFAULT_CHART_HEIGHT)));
+    if(els.chartSizer){
+      els.chartSizer.style.width = w + 'px';
+      els.chartSizer.style.height = h + 'px';
+    }
+    if(els.wheelCanvas){
+      els.wheelCanvas.width = w;
+      els.wheelCanvas.height = h;
+    }
+  }
+
+  function initChartResizing(){
+    if(!els.chartSizer || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      const box = els.chartSizer.getBoundingClientRect();
+      const w = Math.max(320, Math.min(1200, Math.round(box.width)));
+      const h = Math.max(320, Math.min(1200, Math.round(box.height)));
+      if(w === state.settings.chartWidth && h === state.settings.chartHeight) return;
+      state.settings.chartWidth = w;
+      state.settings.chartHeight = h;
+      applyChartDimensions(w, h);
+      persist();
+      renderChart();
+    });
+    observer.observe(els.chartSizer);
+  }
+
+  function updateColorUI(){
+    const current = state.settings?.current || DEFAULT_COLORS.current;
+    const comparison = state.settings?.comparison || DEFAULT_COLORS.comparison;
+    if(els.currentDot) els.currentDot.style.background = current;
+    if(els.comparisonDot) els.comparisonDot.style.background = comparison;
+    if(els.currentColor) els.currentColor.value = current;
+    if(els.comparisonColor) els.comparisonColor.value = comparison;
+  }
+
+  function renderChart(){
+    const cur = selected();
+    const compare = comparisonAssessment();
+    const ctx = els.wheelCanvas.getContext('2d');
+    const W = els.wheelCanvas.width, H = els.wheelCanvas.height;
+    ctx.clearRect(0,0,W,H);
+
+    const cx = W/2, cy = H/2, radius = Math.min(W,H)*0.34;
+    const n = cur.areas.length;
+    const rings = 10;
+
+    ctx.strokeStyle = 'rgba(255,255,255,.17)';
+    ctx.lineWidth = 1;
+    for(let r=1;r<=rings;r++){
+      const rr = radius * (r/rings);
+      ctx.beginPath();
+      for(let i=0;i<n;i++){
+        const a = -Math.PI/2 + i*(Math.PI*2/n);
+        const x = cx + Math.cos(a)*rr;
+        const y = cy + Math.sin(a)*rr;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    for(let i=0;i<n;i++){
+      const a = -Math.PI/2 + i*(Math.PI*2/n);
+      const x = cx + Math.cos(a)*radius;
+      const y = cy + Math.sin(a)*radius;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(x,y); ctx.stroke();
+      const labelRadius = radius + 36;
+      const lx = cx + Math.cos(a)*labelRadius;
+      const ly = cy + Math.sin(a)*labelRadius;
+      ctx.fillStyle = 'rgba(232,236,242,.95)';
+      ctx.font = '15px system-ui';
+      const label = `${String(i+1).padStart(2,'0')} ${cur.areas[i].name}`;
+      const m = ctx.measureText(label);
+      ctx.fillText(label, lx - m.width/2, ly);
+    }
+
+    const currentColor = state.settings?.current || DEFAULT_COLORS.current;
+    const comparisonColor = state.settings?.comparison || DEFAULT_COLORS.comparison;
+
+    drawDataset(cur.areas.map(calcAreaScore), currentColor, colorToFill(currentColor, 0.22), true);
+    if(compare){
+      const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
+      drawDataset(cur.areas.map(a => map.get(a.name) || 0), comparisonColor, colorToFill(comparisonColor, 0.16), false);
+    }
+
+    function colorToFill(hex, alpha){
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+      if(!m) return `rgba(255,255,255,${alpha})`;
+      const r = parseInt(m[1], 16);
+      const g = parseInt(m[2], 16);
+      const b = parseInt(m[3], 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function drawDataset(values, stroke, fill, points){
+      ctx.beginPath();
+      values.forEach((v,i) => {
+        const rr = radius * (Math.max(0, Math.min(10, v))/10);
+        const a = -Math.PI/2 + i*(Math.PI*2/n);
+        const x = cx + Math.cos(a)*rr;
+        const y = cy + Math.sin(a)*rr;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+
+      if(points){
+        values.forEach((v,i) => {
+          const rr = radius * (Math.max(0, Math.min(10, v))/10);
+          const a = -Math.PI/2 + i*(Math.PI*2/n);
+          const x = cx + Math.cos(a)*rr;
+          const y = cy + Math.sin(a)*rr;
+          ctx.beginPath();
+          ctx.arc(x,y,11,0,Math.PI*2);
+          ctx.fillStyle = '#0f1117';
+          ctx.fill();
+          ctx.strokeStyle = stroke;
+          ctx.stroke();
+          ctx.fillStyle = stroke;
+          ctx.font = '12px system-ui';
+          const txt = String(v || 0);
+          const m = ctx.measureText(txt);
+          ctx.fillText(txt, x-m.width/2, y+4);
+        });
+      }
+    }
+  }
+
+  function exportData(){
+    const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `assessment-scoring-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData(file){
+    const r = new FileReader();
+    r.onload = () => {
+      try{
+        const parsed = JSON.parse(String(r.result));
+        if(!parsed.assessments?.length) throw new Error('Invalid JSON');
+        state = parsed;
+        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
+        if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
+        if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
+        if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+        if(!state.selectedId) state.selectedId = state.assessments[0].id;
+        persist();
+        render();
+      }catch(e){ alert('Import failed: ' + e.message); }
+    };
+    r.readAsText(file);
+  }
+
+  function escapeHtml(text){
+    return String(text)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;');
+  }
+
+  function addMonths(dateISO, m){
+    const d = new Date(dateISO || todayISO());
+    d.setMonth(d.getMonth() + m);
+    return d.toISOString().slice(0,10);
+  }
+
+  function render(){
+    renderHistory();
+    renderEditor();
+    renderTargets();
+    updateColorUI();
+    applyChartDimensions(state.settings?.chartWidth || DEFAULT_CHART_WIDTH, state.settings?.chartHeight || DEFAULT_CHART_HEIGHT);
+    renderChart();
+  }
+
+  els.newAssessment.onclick = () => {
+    const next = blankAssessment();
+    state.assessments.push(next);
+    state.selectedId = next.id;
+    persist();
+    render();
+  };
+
+  els.duplicateAssessment.onclick = () => {
+    const next = blankAssessment(selected());
+    state.assessments.push(next);
+    state.selectedId = next.id;
+    persist();
+    render();
+  };
+
+  els.deleteAssessment.onclick = () => {
+    if(state.assessments.length === 1){
+      alert('At least one run must remain.');
+      return;
+    }
+    const cur = selected();
+    if(!confirm(`Delete run "${cur.title || 'Untitled'}"?`)) return;
+    state.assessments = state.assessments.filter(a => a.id !== cur.id);
+    state.selectedId = state.assessments[0].id;
+    persist();
+    render();
+  };
+
+  els.resetValues.onclick = () => {
+    const cur = selected();
+    if(!confirm('Reset all entered values in the current run?')) return;
+    cur.areas.forEach(area => area.items.forEach(item => { item.value = null; }));
+    persist();
+    render();
+  };
+
+  els.plusQuarter.onclick = () => {
+    const cur = selected();
+    cur.nextReviewDate = addMonths(cur.date || todayISO(), 3);
+    persist();
+    render();
+  };
+
+  els.addArea.onclick = () => {
+    if(!isEditMode) return;
+    const cur = selected();
+    const nextNum = cur.areas.length + 1;
+    cur.areas.push({
+      name: `New Area ${nextNum}`,
+      items: [
+        { text:'New prompt 1', value:null },
+        { text:'New prompt 2', value:null },
+        { text:'New prompt 3', value:null },
+        { text:'New prompt 4', value:null }
+      ],
+      target: 8
+    });
+    persist();
+    render();
+  };
+
+
+
+  els.toggleEdit.onclick = () => {
+    isEditMode = !isEditMode;
+    render();
+  };
+
+  els.currentColor.oninput = () => {
+    state.settings.current = els.currentColor.value;
+    persist();
+    updateColorUI();
+    renderChart();
+  };
+
+  els.comparisonColor.oninput = () => {
+    state.settings.comparison = els.comparisonColor.value;
+    persist();
+    updateColorUI();
+    renderChart();
+  };
+
+  els.exportBtn.onclick = exportData;
+  els.importFile.onchange = () => {
+    const f = els.importFile.files?.[0];
+    if(f) importData(f);
+    els.importFile.value = '';
+  };
+
+  initChartResizing();
+  render();
+})();
+</script>
+</body>
+</html>
