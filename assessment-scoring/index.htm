@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -78,13 +78,13 @@
     <div class="top">
       <div>
         <h1>Assessment Scoring / Wheel of Life</h1>
-        <p class="sub">Každou oblast ohodnoť 1-10 (10 = maximální spokojenost). Ukládá se historie hodnocení do Local Storage, můžeš exportovat/importovat JSON a porovnat současný průchod s předchozím.</p>
+        <p class="sub">Rate each area from 1-10 (10 = maximum satisfaction). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
       </div>
       <div class="toolbar panel">
-        <button id="newAssessment" class="btnPrimary">+ Nové hodnocení</button>
-        <button id="duplicateAssessment">Duplikovat strukturu</button>
-        <button id="deleteAssessment" class="btnDanger">Smazat průchod</button>
-        <button id="resetValues">Reset hodnot</button>
+        <button id="newAssessment" class="btnPrimary">+ New assessment</button>
+        <button id="duplicateAssessment">Duplicate structure</button>
+        <button id="deleteAssessment" class="btnDanger">Delete run</button>
+        <button id="resetValues">Reset values</button>
         <button id="exportBtn">Export JSON</button>
         <label for="importFile" class="small">Import</label>
         <input id="importFile" type="file" accept="application/json" />
@@ -93,15 +93,15 @@
 
     <div class="layout">
       <section class="panel">
-        <h2 style="margin:0 0 8px">Historie průchodů</h2>
+        <h2 style="margin:0 0 8px">Run history</h2>
         <div style="display:grid;gap:8px;margin-bottom:8px">
-          <label class="small">Název průchodu</label>
-          <input id="assessmentTitle" type="text" placeholder="Např. Q1 2026" />
-          <label class="small">Datum vyplnění</label>
+          <label class="small">Run title</label>
+          <input id="assessmentTitle" type="text" placeholder="e.g. Q1 2026" />
+          <label class="small">Assessment date</label>
           <input id="assessmentDate" type="date" />
-          <label class="small">Další review</label>
+          <label class="small">Next review</label>
           <input id="nextReviewDate" type="date" />
-          <button id="plusQuarter">+3 měsíce</button>
+          <button id="plusQuarter">+3 months</button>
         </div>
         <div class="history" id="historyList"></div>
       </section>
@@ -111,15 +111,15 @@
           <div>
             <canvas id="wheelCanvas" width="560" height="560" aria-label="Wheel chart"></canvas>
             <div class="legend" style="margin-top:8px">
-              <span><i class="dot" style="background:#7bc1ff"></i>Aktuální</span>
-              <span><i class="dot" style="background:#ffd27b"></i>Srovnání</span>
+              <span><i class="dot" style="background:#7bc1ff"></i>Current</span>
+              <span><i class="dot" style="background:#ffd27b"></i>Comparison</span>
             </div>
           </div>
           <div class="targets panel" style="padding:10px">
-            <h3 style="margin:0 0 8px">Priority & cíle</h3>
-            <p class="small" style="margin-top:0">Automaticky seřazeno od nejslabších oblastí. Nastav si cílové číslo pro další scoring / konec roku.</p>
+            <h3 style="margin:0 0 8px">Priorities & targets</h3>
+            <p class="small" style="margin-top:0">Automatically sorted from lowest-scoring areas. Set your target score for the next assessment or end-of-year checkpoint.</p>
             <table>
-              <thead><tr><th>Oblast</th><th>Skóre</th><th>Cíl</th><th>Gap</th></tr></thead>
+              <thead><tr><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
               <tbody id="targetsBody"></tbody>
             </table>
           </div>
@@ -127,14 +127,14 @@
 
         <div class="grid" id="areasGrid"></div>
         <section class="panel" style="margin-top:12px">
-          <h3 style="margin:0 0 8px">Správa oblastí (6-10 doporučeno)</h3>
-          <p class="small" style="margin:0 0 8px">Můžeš upravovat názvy i texty přímo v kartách výše. Tady můžeš rychle přidat nebo odebrat celé oblasti.</p>
+          <h3 style="margin:0 0 8px">Area management (6-10 recommended)</h3>
+          <p class="small" style="margin:0 0 8px">You can edit area names and prompts directly in the cards above. Here you can quickly add or remove full areas.</p>
           <div class="toolbar">
-            <button id="addArea">+ Přidat oblast</button>
-            <button id="removeLastArea">Odebrat poslední oblast</button>
+            <button id="addArea">+ Add area</button>
+            <button id="removeLastArea">Remove last area</button>
           </div>
         </section>
-        <div class="footer">Tip: Ideální je mít 6-10 oblastí. Každou můžeš přejmenovat i průběžně upravovat podle svého.</div>
+        <div class="footer">Tip: Keeping 6-10 areas works best. You can rename and adjust each one over time.</div>
       </section>
     </div>
   </div>
@@ -144,54 +144,87 @@
   const STORAGE_KEY = 'assessmentScoring.v1';
   const defaultAreas = [
     { name: 'Health & Wellness', items:[
-      'Pečuji o fyzické, mentální a emoční zdraví',
-      'Mám dostatek spánku',
-      'Pravidelně se hýbu',
-      'Mám energii pro běžný den'
+      'I take care of my physical, mental, and emotional health.',
+      'I eat well and drink plenty of water.',
+      'I get a sufficient amount of sleep.',
+      'I have a regular exercise routine.',
+      'I have a healthy self-image.',
+      "I have healed from any stress or trauma I've experienced.",
+      'I feel strong in body, heart, and mind.',
+      "I'm equipped to handle life's events with strength and vitality."
     ]},
-    { name: 'Personal Growth', items:[
-      'Rozvíjím dovednosti a přemýšlení',
-      'Mám čas na reflexi a plánování',
-      'Umím pracovat se stresem',
-      'Učím se nové věci'
+    { name: 'Spiritual & Personal Growth', items:[
+      'I have identified what my own definition of spirituality is.',
+      'I engage in regular spiritual practice.',
+      'I invest time and energy into my personal and spiritual growth.',
+      'My words, thoughts, and actions are congruent with my beliefs and values.',
+      'I seek to learn new things about myself and others.',
+      'I feel clear and connected to what my guiding principles are.',
+      'I practice gratitude regularly.',
+      'I have found peace and forgiveness where there has been pain and suffering.'
     ]},
-    { name: 'Finance', items:[
-      'Rozumím svým příjmům a výdajům',
-      'Budují rezervu / investice',
-      'Mám jasný finanční plán',
-      'Nežiju v dlouhodobém chaosu s penězi'
-    ]},
-    { name: 'Work & Learning', items:[
-      'Práce mi dává smysl',
-      'Posouvám se profesně',
-      'Mám zdravé pracovní hranice',
-      'Mám plán dalšího růstu'
-    ]},
-    { name: 'Family & Relationships', items:[
-      'Mám kvalitní čas s blízkými',
-      'Komunikace je otevřená a respektující',
-      'Mám zdravé hranice',
-      'Cítím podporu a sounáležitost'
-    ]},
-    { name: 'Fun & Recreation', items:[
-      'Pravidelně odpočívám',
-      'Mám prostor na koníčky',
-      'Dopřávám si radost bez výčitek',
-      'Můj týden není jen povinnost'
+    { name: 'Financial', items:[
+      'I have financial and economic security.',
+      'I have a healthy relationship with money.',
+      'I spend my money responsibly and live within my means.',
+      'I have a financial plan for the future and contribute to it regularly.',
+      'I believe in my ability to acquire wealth.',
+      'I am implementing the systems and skills needed to meet my financial goals.',
+      'I have streamlined and automated my financial dealings.',
+      'I have a favorable credit rating.'
     ]},
     { name: 'Physical Environment', items:[
-      'Domov/pracoviště jsou funkční a příjemné',
-      'Mám pořádek v okolí',
-      'Řeším průběžně údržbu a opravy',
-      'Prostředí mě podporuje'
+      'My home, car, and workplace are clean and safe.',
+      'My physical environment is free from clutter and excess.',
+      'I enjoy spending time in my personal spaces.',
+      'I feel organized.',
+      'I am up-to-date on necessary repairs and maintenance.',
+      'There are physical areas where I can go to recharge and experience comfort.',
+      'My environments support having positive energy, good habits, and personal success.',
+      'I feel supported in the management of my home.'
     ]},
-    { name: 'Purpose & Vision', items:[
-      'Vím, kam směřuji',
-      'Mám hodnoty převedené do konkrétních kroků',
-      'Postupuji podle priorit',
-      'Vím, co chci mít hotové do konce roku'
+    { name: 'Personal', items:[
+      'My basic needs are taken care of.',
+      'I generally feel happy and fulfilled.',
+      'I have a positive attitude and outlook on life.',
+      'I give myself grace for my limits and imperfections.',
+      'I regularly take time for life planning, reflection, and self-care.',
+      'I am comfortable spending time alone.',
+      'There are hobbies and interests I engage in regularly.',
+      'There are personal goals or projects that I want to achieve/complete.'
+    ]},
+    { name: 'Fun & Recreation', items:[
+      'I take regularly planned vacations and/or time off.',
+      'I create moments for rest and rejuvenation.',
+      'I give myself permission to have fun without feeling guilty.',
+      'I have fun in ways that serve my highest and best self.',
+      'I reward myself when I accomplish a goal.',
+      'I do things on a regular basis that bring me joy.',
+      'I spend enough time with people I enjoy.',
+      'My social interactions are enjoyable, meaningful, and fun.'
+    ]},
+    { name: 'Work & Learning', items:[
+      "I am enthusiastic and engaged by what I'm doing for my life's work.",
+      'I am fulfilled by the work I do and believe it adds value.',
+      'My work is a true fit for my purpose, strengths, and personal gifts.',
+      'I am contributing to the work the way I desire.',
+      'I have positive interactions at work.',
+      'I expand my skills through continued growth and development.',
+      'I have an actionable plan to support the growth and success I desire.',
+      'I am curious and eager to learn.'
+    ]},
+    { name: 'Family & Relationships', items:[
+      'I am present with my family, friends, and/or significant other.',
+      'I share mutual love, respect, and appreciation with my loved ones.',
+      'I have healthy boundaries.',
+      'I am free from toxic relationships.',
+      'I experience vulnerability and intimacy in my personal relationships.',
+      'I have a sense of community and belonging where I live, work, and play.',
+      'I have clarity and peace in the areas I feel like I am lacking.',
+      'I am actively designing what I want from my relationships.'
     ]}
   ];
+
 
   const els = {
     historyList: document.getElementById('historyList'),
@@ -273,7 +306,7 @@
       const btn = document.createElement('button');
       btn.className = a.id === state.selectedId ? 'active' : '';
       const avg = (a.areas.reduce((s,x)=>s+calcAreaScore(x),0) / a.areas.length).toFixed(1);
-      btn.innerHTML = `<strong>${escapeHtml(a.title || 'Bez názvu')}</strong><br><span class="small">${a.date || 'bez data'} · průměr ${avg}</span>`;
+      btn.innerHTML = `<strong>${escapeHtml(a.title || 'Untitled')}</strong><br><span class="small">${a.date || 'no date'} · average ${avg}</span>`;
       btn.onclick = () => { state.selectedId = a.id; persist(); render(); };
       els.historyList.appendChild(btn);
     }
@@ -292,7 +325,7 @@
       const score = calcAreaScore(area);
       card.innerHTML = `<div class="areaHead">
           <h3 contenteditable="true" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
-          <span class="chip">Skóre: <strong>${score}</strong>/10</span>
+          <span class="chip">Score: <strong>${score}</strong>/10</span>
         </div>`;
 
       area.items.forEach((item, itemIdx) => {
@@ -316,7 +349,7 @@
 
       const meta = document.createElement('div');
       meta.className = 'itemRow';
-      meta.innerHTML = `<span class="small">Cílové číslo pro další review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" />`;
+      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" />`;
       meta.querySelector('input').oninput = (e)=>{
         const v = Number(e.target.value);
         area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
@@ -471,12 +504,12 @@
     r.onload = () => {
       try{
         const parsed = JSON.parse(String(r.result));
-        if(!parsed.assessments?.length) throw new Error('Neplatný JSON');
+        if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
         if(!state.selectedId) state.selectedId = state.assessments[0].id;
         persist();
         render();
-      }catch(e){ alert('Import selhal: ' + e.message); }
+      }catch(e){ alert('Import failed: ' + e.message); }
     };
     r.readAsText(file);
   }
@@ -520,11 +553,11 @@
 
   els.deleteAssessment.onclick = () => {
     if(state.assessments.length === 1){
-      alert('Musí zůstat alespoň jeden průchod.');
+      alert('At least one run must remain.');
       return;
     }
     const cur = selected();
-    if(!confirm(`Opravdu smazat průchod "${cur.title || 'Bez názvu'}"?`)) return;
+    if(!confirm(`Delete run "${cur.title || 'Untitled'}"?`)) return;
     state.assessments = state.assessments.filter(a => a.id !== cur.id);
     state.selectedId = state.assessments[0].id;
     persist();
@@ -533,7 +566,7 @@
 
   els.resetValues.onclick = () => {
     const cur = selected();
-    if(!confirm('Vynulovat všechny vyplněné hodnoty v aktuálním průchodu?')) return;
+    if(!confirm('Reset all entered values in the current run?')) return;
     cur.areas.forEach(area => area.items.forEach(item => { item.value = null; }));
     persist();
     render();
@@ -552,10 +585,10 @@
     cur.areas.push({
       name: `New Area ${nextNum}`,
       items: [
-        { text:'Nová položka 1', value:null },
-        { text:'Nová položka 2', value:null },
-        { text:'Nová položka 3', value:null },
-        { text:'Nová položka 4', value:null }
+        { text:'New prompt 1', value:null },
+        { text:'New prompt 2', value:null },
+        { text:'New prompt 3', value:null },
+        { text:'New prompt 4', value:null }
       ],
       target: 8
     });
@@ -566,10 +599,10 @@
   els.removeLastArea.onclick = () => {
     const cur = selected();
     if(cur.areas.length <= 1){
-      alert('Musí zůstat alespoň jedna oblast.');
+      alert('At least one area must remain.');
       return;
     }
-    if(!confirm('Odebrat poslední oblast v aktuálním průchodu?')) return;
+    if(!confirm('Remove the last area in the current run?')) return;
     cur.areas.pop();
     persist();
     render();
