@@ -124,7 +124,7 @@
             <h3 style="margin:0 0 8px">Priorities & targets</h3>
             <p class="small" style="margin-top:0">Automatically sorted from lowest-scoring areas. Set your target score for the next assessment or end-of-year checkpoint.</p>
             <table>
-              <thead><tr><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
+              <thead><tr><th>#</th><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
               <tbody id="targetsBody"></tbody>
             </table>
           </div>
@@ -442,14 +442,15 @@
 
   function renderTargets(){
     const cur = selected();
-    const rows = cur.areas.map(a => {
+    const rows = cur.areas.map((a, idx) => {
       const score = calcAreaScore(a);
       const target = Number(a.target || 0);
-      return { name:a.name, score, target, gap:+(target - score).toFixed(1) };
+      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1) };
     }).sort((a,b)=>a.score-b.score);
 
     els.targetsBody.innerHTML = rows.map(r => `
       <tr>
+        <td>${String(r.order).padStart(2,'0')}</td>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.score}</td>
         <td>${r.target || '-'}</td>
