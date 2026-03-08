@@ -788,40 +788,8 @@
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
       const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
-      const comparisonStroke = createAreaGradient(cur, cx, cy, radius);
       const comparisonColors = cur.areas.map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
-      drawComparisonDataset(comparisonValues, comparisonStroke, comparisonColors);
-    }
-
-    function createAreaGradient(run, x, y, r){
-      const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
-      if(typeof ctx.createConicGradient === 'function'){
-        const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
-        if(!colors.length){
-          gradient.addColorStop(0, DEFAULT_AREA_COMPARISON_COLOR);
-          gradient.addColorStop(1, DEFAULT_AREA_COMPARISON_COLOR);
-          return gradient;
-        }
-        colors.forEach((color, idx) => {
-          const from = idx / colors.length;
-          const to = (idx + 1) / colors.length;
-          gradient.addColorStop(from, color);
-          gradient.addColorStop(to, color);
-        });
-        return gradient;
-      }
-
-      const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
-      if(!colors.length){
-        fallbackGradient.addColorStop(0, DEFAULT_AREA_COMPARISON_COLOR);
-        fallbackGradient.addColorStop(1, DEFAULT_AREA_COMPARISON_COLOR);
-        return fallbackGradient;
-      }
-      colors.forEach((color, idx) => {
-        const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
-        fallbackGradient.addColorStop(pos, color);
-      });
-      return fallbackGradient;
+      drawComparisonDataset(comparisonValues, comparisonColors);
     }
 
     function hexToRgba(hex, alpha){
@@ -847,7 +815,7 @@
       ctx.closePath();
     }
 
-    function drawComparisonDataset(values, stroke, areaColors){
+    function drawComparisonDataset(values, areaColors){
       const points = getPolygonPoints(values);
       ctx.save();
       tracePolygon(points);
@@ -862,10 +830,30 @@
         ctx.fillRect(0, 0, W, H);
       });
       ctx.restore();
-      tracePolygon(points);
-      ctx.strokeStyle = stroke;
+      drawComparisonOutline(points, areaColors);
+    }
+
+    function drawComparisonOutline(points, areaColors){
+      if(!points.length) return;
+      ctx.save();
       ctx.lineWidth = 2;
-      ctx.stroke();
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      for(let i=0;i<points.length;i++){
+        const from = points[i];
+        const to = points[(i+1) % points.length];
+        const fromColor = areaColors[i] || DEFAULT_AREA_COMPARISON_COLOR;
+        const toColor = areaColors[(i+1) % points.length] || DEFAULT_AREA_COMPARISON_COLOR;
+        const edgeGradient = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
+        edgeGradient.addColorStop(0, fromColor);
+        edgeGradient.addColorStop(1, toColor);
+        ctx.strokeStyle = edgeGradient;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
 
     function drawDataset(values, stroke, fill, points){
