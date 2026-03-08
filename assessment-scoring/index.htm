@@ -62,12 +62,23 @@
     .areaToggle{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:0;font-size:16px}
     .areaBody{display:block}
     .area h3{margin:0;font-size:16px}
+    .area h3.toggleable{cursor:pointer}
     .chip{font-size:12px;color:var(--muted)}
-    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) 82px auto;gap:8px;align-items:center;margin:7px 0}
-    .itemRow input[type='number']{width:82px}
+    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,220px) auto;gap:8px;align-items:center;margin:7px 0}
+    .sliderWrap{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center}
+    .sliderWrap input[type='range']{width:100%;padding:0;appearance:none;height:8px;border-radius:999px;background:linear-gradient(90deg,#8b5cf6 0%,#22c55e 100%);border:none}
+    .sliderWrap input[type='range']::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgba(15,17,23,.45);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+    .sliderWrap input[type='range']::-moz-range-track{height:8px;border-radius:999px;background:linear-gradient(90deg,#8b5cf6 0%,#22c55e 100%);border:none}
+    .sliderWrap input[type='range']::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgba(15,17,23,.45);box-shadow:0 1px 4px rgba(0,0,0,.35)}
+    .sliderScale{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+    .sliderValue{font-size:12px;color:var(--accent);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+    .targetRow{margin-top:10px;padding:10px;border-radius:10px;border:1px solid rgba(255,210,123,.45);background:linear-gradient(180deg,rgba(255,210,123,.16),rgba(255,210,123,.05))}
+    .targetRow .small{color:var(--accent2);font-weight:600;letter-spacing:.01em}
+    .targetRow .sliderValue{color:var(--accent2)}
     .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
     .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
     .areaActions{display:flex;gap:8px;align-items:center}
+    .areaDone{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(135,227,162,.2);border:1px solid rgba(135,227,162,.55);color:var(--ok);font-weight:700;font-size:13px}
     .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
@@ -86,7 +97,7 @@
     <div class="top">
       <div>
         <h1>Assessment Scoring</h1>
-        <p class="sub">Rate each area from 1-10 (10 = maximum satisfaction). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
+        <p class="sub">Rate each area on a 1-10 slider (1 = mess, 10 = satisfied). Assessment history is saved in Local Storage; you can export/import JSON and compare each run with a previous one.</p>
       </div>
       <div class="toolbar panel">
         <button id="newAssessment" class="btnPrimary">+ New assessment</button>
@@ -125,8 +136,6 @@
               <span><i class="dot" id="comparisonDot"></i>Comparison</span>
               <div class="legendControls">
                 <span class="small">Drag chart corner to resize width & height</span>
-                <label class="small">Current color <input id="currentColor" type="color" /></label>
-                <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
               </div>
             </div>
           </div>
@@ -156,7 +165,8 @@
 <script>
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
-  const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
+  const CURRENT_GRADIENT = ['#8b5cf6', '#22c55e'];
+  const DEFAULT_AREA_COMPARISON_COLOR = '#ffd27b';
   const DEFAULT_CHART_SIZE = 780;
   const DEFAULT_CHART_WIDTH = 780;
   const DEFAULT_CHART_HEIGHT = 780;
@@ -253,8 +263,6 @@
     wheelCanvas: document.getElementById('wheelCanvas'),
     currentDot: document.getElementById('currentDot'),
     comparisonDot: document.getElementById('comparisonDot'),
-    currentColor: document.getElementById('currentColor'),
-    comparisonColor: document.getElementById('comparisonColor'),
     title: document.getElementById('assessmentTitle'),
     date: document.getElementById('assessmentDate'),
     nextReviewDate: document.getElementById('nextReviewDate'),
@@ -285,7 +293,8 @@
       areas: sourceAreas.map(a => ({
         name: a.name,
         items: a.items.map(t => ({ text: typeof t === 'string' ? t : t.text, value: null })),
-        target: a.target || 8
+        target: a.target || 8,
+        comparisonColor: a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR
       }))
     };
   }
@@ -295,20 +304,23 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+      parsed.assessments.forEach(a => a.areas?.forEach(area => {
+        if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
+      }));
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
     }
   }
 
@@ -316,8 +328,13 @@
 
   function selected(){ return state.assessments.find(a => a.id === state.selectedId) || state.assessments[0]; }
 
+  function scoreValue(raw){
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+  }
+
   function calcAreaScore(area){
-    const nums = area.items.map(i => Number(i.value)).filter(v => Number.isFinite(v));
+    const nums = area.items.map(i => scoreValue(i.value)).filter(v => v !== null);
     if(!nums.length) return 0;
     return +(nums.reduce((a,b)=>a+b,0) / nums.length).toFixed(1);
   }
@@ -326,6 +343,10 @@
     const ordered = [...state.assessments].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
     const idx = ordered.findIndex(a => a.id === state.selectedId);
     return idx > 0 ? ordered[idx-1] : null;
+  }
+
+  function isAreaComplete(area){
+    return area.items.length > 0 && area.items.every(item => scoreValue(item.value) !== null);
   }
 
   function renderHistory(){
@@ -356,15 +377,18 @@
       const card = document.createElement('article');
       card.className = 'area';
       const score = calcAreaScore(area);
+      const areaComplete = isAreaComplete(area);
       const collapseKey = `${cur.id}:${areaIdx}`;
       const isCollapsed = state.settings.collapsed[collapseKey] ?? true;
       card.innerHTML = `<div class="areaHead">
           <div class="areaTitleWrap">
             <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
-            <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
           </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
+            ${areaComplete ? '<span class="areaDone" title="Area completed" aria-label="Area completed">✔</span>' : ''}
+            <label class="small">Area color <input type="color" data-action="areaColor" data-ai="${areaIdx}" value="${area.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR}" /></label>
             <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
           </div>
         </div>`;
@@ -377,19 +401,32 @@
         row.className = 'itemRow';
         row.innerHTML = `
           <span class="itemText" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
-          <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />
+          <div class="sliderWrap">
+            <input type="range" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : 5}" data-ai="${areaIdx}" data-ii="${itemIdx}" aria-label="Score from 1 to 10" />
+            <span class="sliderValue">${Number.isFinite(item.value) ? item.value : '—'}</span>
+            <div class="sliderScale"><span>1 - mess</span><span>10 - satisfied</span></div>
+          </div>
           <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
 
-        const num = row.querySelector('input');
-        num.oninput = () => {
-          const v = num.value === '' ? null : Math.min(10, Math.max(1, Number(num.value)));
+        const slider = row.querySelector('input[type="range"]');
+        const sliderValue = row.querySelector('.sliderValue');
+        const applyItemSliderValue = () => {
+          const v = Math.min(10, Math.max(1, Number(slider.value)));
           cur.areas[areaIdx].items[itemIdx].value = Number.isFinite(v) ? v : null;
+          sliderValue.textContent = Number.isFinite(v) ? String(v) : '—';
           persist();
           updateAreaScore(areaIdx);
+          updateAreaCompletion(areaIdx);
           renderTargets();
           renderChart();
           renderHistory();
         };
+        slider.oninput = applyItemSliderValue;
+        const applyOnInteractionStart = () => {
+          if(scoreValue(cur.areas[areaIdx].items[itemIdx].value) === null) applyItemSliderValue();
+        };
+        slider.onpointerdown = applyOnInteractionStart;
+        slider.onmousedown = applyOnInteractionStart;
 
         const delBtn = row.querySelector('[data-action="deleteItem"]');
         delBtn.onclick = () => {
@@ -419,11 +456,20 @@
       body.appendChild(addRow);
 
       const meta = document.createElement('div');
-      meta.className = 'itemRow';
-      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" /><span></span>`;
-      meta.querySelector('input').oninput = (e)=>{
-        const v = Number(e.target.value);
-        area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
+      meta.className = 'itemRow targetRow';
+      meta.innerHTML = `<span class="small">Target score for next review (future plan)</span>
+        <div class="sliderWrap">
+          <input type="range" min="1" max="10" step="1" value="${Number.isFinite(area.target) ? area.target : 8}" aria-label="Target score for next review from 1 to 10" />
+          <span class="sliderValue">${Number.isFinite(area.target) ? area.target : '—'}</span>
+          <div class="sliderScale"><span>1 - mess</span><span>10 - satisfied</span></div>
+        </div>
+        <span></span>`;
+      const targetSlider = meta.querySelector('input[type="range"]');
+      const targetValue = meta.querySelector('.sliderValue');
+      targetSlider.oninput = ()=>{
+        const v = Math.min(10, Math.max(1, Number(targetSlider.value)));
+        area.target = Number.isFinite(v) ? v : null;
+        targetValue.textContent = Number.isFinite(v) ? String(v) : '—';
         persist();
         renderTargets();
       };
@@ -434,6 +480,25 @@
         persist();
         renderEditor();
       };
+
+      const areaTitle = card.querySelector('h3[data-role="name"]');
+      if(areaTitle && !isEditMode){
+        areaTitle.onclick = () => {
+          state.settings.collapsed[collapseKey] = !isCollapsed;
+          persist();
+          renderEditor();
+        };
+      }
+
+      const areaColorInput = card.querySelector('[data-action="areaColor"]');
+      if(areaColorInput){
+        areaColorInput.oninput = () => {
+          area.comparisonColor = areaColorInput.value || DEFAULT_AREA_COMPARISON_COLOR;
+          persist();
+          updateColorUI();
+          renderChart();
+        };
+      }
 
       card.querySelector('[data-action="deleteArea"]').onclick = () => {
         if(!isEditMode) return;
@@ -481,6 +546,27 @@
     if(!card) return;
     const scoreEl = card.querySelector('.chip strong');
     if(scoreEl) scoreEl.textContent = String(calcAreaScore(cur.areas[areaIdx]));
+  }
+
+  function updateAreaCompletion(areaIdx){
+    const cur = selected();
+    const card = els.areasGrid.children[areaIdx];
+    if(!card) return;
+    const actions = card.querySelector('.areaActions');
+    if(!actions) return;
+    const existing = actions.querySelector('.areaDone');
+    const complete = isAreaComplete(cur.areas[areaIdx]);
+    if(complete && !existing){
+      const badge = document.createElement('span');
+      badge.className = 'areaDone';
+      badge.title = 'Area completed';
+      badge.setAttribute('aria-label', 'Area completed');
+      badge.textContent = '✔';
+      const deleteBtn = actions.querySelector('[data-action="deleteArea"]');
+      if(deleteBtn) actions.insertBefore(badge, deleteBtn);
+      else actions.appendChild(badge);
+    }
+    if(!complete && existing) existing.remove();
   }
 
   function renderTargets(){
@@ -533,12 +619,13 @@
   }
 
   function updateColorUI(){
-    const current = state.settings?.current || DEFAULT_COLORS.current;
-    const comparison = state.settings?.comparison || DEFAULT_COLORS.comparison;
-    if(els.currentDot) els.currentDot.style.background = current;
-    if(els.comparisonDot) els.comparisonDot.style.background = comparison;
-    if(els.currentColor) els.currentColor.value = current;
-    if(els.comparisonColor) els.comparisonColor.value = comparison;
+    if(els.currentDot) els.currentDot.style.background = `linear-gradient(90deg, ${CURRENT_GRADIENT[0]} 0%, ${CURRENT_GRADIENT[1]} 100%)`;
+    const cur = selected();
+    const areaColors = (cur?.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+    const comparisonGradient = areaColors.length
+      ? `linear-gradient(90deg, ${areaColors.join(', ')})`
+      : DEFAULT_AREA_COMPARISON_COLOR;
+    if(els.comparisonDot) els.comparisonDot.style.background = comparisonGradient;
   }
 
   function renderChart(){
@@ -582,16 +669,57 @@
       ctx.fillText(label, lx - m.width/2, ly);
     }
 
-    const currentColor = state.settings?.current || DEFAULT_COLORS.current;
-    const comparisonColor = state.settings?.comparison || DEFAULT_COLORS.comparison;
+    const currentStroke = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    currentStroke.addColorStop(0, CURRENT_GRADIENT[0]);
+    currentStroke.addColorStop(1, CURRENT_GRADIENT[1]);
+    const currentFill = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    currentFill.addColorStop(0, 'rgba(139,92,246,0.22)');
+    currentFill.addColorStop(1, 'rgba(34,197,94,0.22)');
 
-    drawDataset(cur.areas.map(calcAreaScore), currentColor, colorToFill(currentColor, 0.22), true);
+    drawDataset(cur.areas.map(calcAreaScore), currentStroke, currentFill, true);
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
-      drawDataset(cur.areas.map(a => map.get(a.name) || 0), comparisonColor, colorToFill(comparisonColor, 0.16), false);
+      const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
+      const comparisonStroke = createAreaGradient(cur, cx, cy, radius);
+      const comparisonFill = createAreaGradient(cur, cx, cy, radius, 0.16);
+      drawDataset(comparisonValues, comparisonStroke, comparisonFill, false);
     }
 
-    function colorToFill(hex, alpha){
+    function createAreaGradient(run, x, y, r, alpha){
+      const colors = (run.areas || []).map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
+      if(typeof ctx.createConicGradient === 'function'){
+        const gradient = ctx.createConicGradient(-Math.PI / 2, x, y);
+        if(!colors.length){
+          const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+          gradient.addColorStop(0, fallback);
+          gradient.addColorStop(1, fallback);
+          return gradient;
+        }
+        colors.forEach((color, idx) => {
+          const from = idx / colors.length;
+          const to = (idx + 1) / colors.length;
+          const c = alpha ? hexToRgba(color, alpha) : color;
+          gradient.addColorStop(from, c);
+          gradient.addColorStop(to, c);
+        });
+        return gradient;
+      }
+
+      const fallbackGradient = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+      if(!colors.length){
+        const fallback = alpha ? `rgba(255,210,123,${alpha})` : DEFAULT_AREA_COMPARISON_COLOR;
+        fallbackGradient.addColorStop(0, fallback);
+        fallbackGradient.addColorStop(1, fallback);
+        return fallbackGradient;
+      }
+      colors.forEach((color, idx) => {
+        const pos = colors.length === 1 ? 0 : idx/(colors.length-1);
+        fallbackGradient.addColorStop(pos, alpha ? hexToRgba(color, alpha) : color);
+      });
+      return fallbackGradient;
+    }
+
+    function hexToRgba(hex, alpha){
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
       if(!m) return `rgba(255,255,255,${alpha})`;
       const r = parseInt(m[1], 16);
@@ -628,7 +756,7 @@
           ctx.fill();
           ctx.strokeStyle = stroke;
           ctx.stroke();
-          ctx.fillStyle = stroke;
+          ctx.fillStyle = '#e8ecf2';
           ctx.font = '12px system-ui';
           const txt = String(v || 0);
           const m = ctx.measureText(txt);
@@ -655,10 +783,13 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
+        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
         if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
         if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+        state.assessments.forEach(a => a.areas?.forEach(area => {
+          if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
+        }));
         if(!state.selectedId) state.selectedId = state.assessments[0].id;
         persist();
         render();
@@ -746,7 +877,8 @@
         { text:'New prompt 3', value:null },
         { text:'New prompt 4', value:null }
       ],
-      target: 8
+      target: 8,
+      comparisonColor: DEFAULT_AREA_COMPARISON_COLOR
     });
     persist();
     render();
@@ -759,19 +891,6 @@
     render();
   };
 
-  els.currentColor.oninput = () => {
-    state.settings.current = els.currentColor.value;
-    persist();
-    updateColorUI();
-    renderChart();
-  };
-
-  els.comparisonColor.oninput = () => {
-    state.settings.comparison = els.comparisonColor.value;
-    persist();
-    updateColorUI();
-    renderChart();
-  };
 
   els.exportBtn.onclick = exportData;
   els.importFile.onchange = () => {
