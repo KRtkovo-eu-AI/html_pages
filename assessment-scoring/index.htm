@@ -143,46 +143,6 @@
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
   const defaultAreas = [
-    { name: 'Health & Wellness', items:[
-      'I take care of my physical, mental, and emotional health.',
-      'I eat well and drink plenty of water.',
-      'I get a sufficient amount of sleep.',
-      'I have a regular exercise routine.',
-      'I have a healthy self-image.',
-      "I have healed from any stress or trauma I've experienced.",
-      'I feel strong in body, heart, and mind.',
-      "I'm equipped to handle life's events with strength and vitality."
-    ]},
-    { name: 'Spiritual & Personal Growth', items:[
-      'I have identified what my own definition of spirituality is.',
-      'I engage in regular spiritual practice.',
-      'I invest time and energy into my personal and spiritual growth.',
-      'My words, thoughts, and actions are congruent with my beliefs and values.',
-      'I seek to learn new things about myself and others.',
-      'I feel clear and connected to what my guiding principles are.',
-      'I practice gratitude regularly.',
-      'I have found peace and forgiveness where there has been pain and suffering.'
-    ]},
-    { name: 'Financial', items:[
-      'I have financial and economic security.',
-      'I have a healthy relationship with money.',
-      'I spend my money responsibly and live within my means.',
-      'I have a financial plan for the future and contribute to it regularly.',
-      'I believe in my ability to acquire wealth.',
-      'I am implementing the systems and skills needed to meet my financial goals.',
-      'I have streamlined and automated my financial dealings.',
-      'I have a favorable credit rating.'
-    ]},
-    { name: 'Physical Environment', items:[
-      'My home, car, and workplace are clean and safe.',
-      'My physical environment is free from clutter and excess.',
-      'I enjoy spending time in my personal spaces.',
-      'I feel organized.',
-      'I am up-to-date on necessary repairs and maintenance.',
-      'There are physical areas where I can go to recharge and experience comfort.',
-      'My environments support having positive energy, good habits, and personal success.',
-      'I feel supported in the management of my home.'
-    ]},
     { name: 'Personal', items:[
       'My basic needs are taken care of.',
       'I generally feel happy and fulfilled.',
@@ -222,8 +182,49 @@
       'I have a sense of community and belonging where I live, work, and play.',
       'I have clarity and peace in the areas I feel like I am lacking.',
       'I am actively designing what I want from my relationships.'
+    ]},
+    { name: 'Health & Wellness', items:[
+      'I take care of my physical, mental, and emotional health.',
+      'I eat well and drink plenty of water.',
+      'I get a sufficient amount of sleep.',
+      'I have a regular exercise routine.',
+      'I have a healthy self-image.',
+      "I have healed from any stress or trauma I've experienced.",
+      'I feel strong in body, heart, and mind.',
+      "I'm equipped to handle life's events with strength and vitality."
+    ]},
+    { name: 'Spiritual & Personal Growth', items:[
+      'I have identified what my own definition of spirituality is.',
+      'I engage in regular spiritual practice.',
+      'I invest time and energy into my personal and spiritual growth.',
+      'My words, thoughts, and actions are congruent with my beliefs and values.',
+      'I seek to learn new things about myself and others.',
+      'I feel clear and connected to what my guiding principles are.',
+      'I practice gratitude regularly.',
+      'I have found peace and forgiveness where there has been pain and suffering.'
+    ]},
+    { name: 'Financial', items:[
+      'I have financial and economic security.',
+      'I have a healthy relationship with money.',
+      'I spend my money responsibly and live within my means.',
+      'I have a financial plan for the future and contribute to it regularly.',
+      'I believe in my ability to acquire wealth.',
+      'I am implementing the systems and skills needed to meet my financial goals.',
+      'I have streamlined and automated my financial dealings.',
+      'I have a favorable credit rating.'
+    ]},
+    { name: 'Physical Environment', items:[
+      'My home, car, and workplace are clean and safe.',
+      'My physical environment is free from clutter and excess.',
+      'I enjoy spending time in my personal spaces.',
+      'I feel organized.',
+      'I am up-to-date on necessary repairs and maintenance.',
+      'There are physical areas where I can go to recharge and experience comfort.',
+      'My environments support having positive energy, good habits, and personal success.',
+      'I feel supported in the management of my home.'
     ]}
   ];
+
 
 
   const els = {
