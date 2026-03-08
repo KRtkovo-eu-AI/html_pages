@@ -65,6 +65,7 @@
     .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
     .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
     .areaActions{display:flex;gap:8px;align-items:center}
+    .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:minmax(320px,470px) 1fr;gap:12px;align-items:start;margin-bottom:12px}
     @media (max-width:900px){.chartWrap{grid-template-columns:1fr}}
@@ -88,6 +89,7 @@
         <button id="duplicateAssessment">Duplicate structure</button>
         <button id="deleteAssessment" class="btnDanger">Delete run</button>
         <button id="resetValues">Reset values</button>
+        <button id="toggleEdit">Edit assessment</button>
         <button id="exportBtn">Export JSON</button>
         <label for="importFile" class="small">Import</label>
         <input id="importFile" type="file" accept="application/json" />
@@ -131,7 +133,7 @@
         <div class="grid" id="areasGrid"></div>
         <section class="panel" style="margin-top:12px">
           <h3 style="margin:0 0 8px">Area management (6-10 recommended)</h3>
-          <p class="small" style="margin:0 0 8px">You can edit area names and prompts directly in the cards above. Add new areas here, and remove each area from its own card.</p>
+          <p class="small" style="margin:0 0 8px">Switch to Edit mode to change area names/prompts, add rows, or delete areas. In default mode these actions are locked to avoid accidental changes.</p>
           <div class="toolbar">
             <button id="addArea">+ Add area</button>
           </div>
@@ -241,6 +243,7 @@
     duplicateAssessment: document.getElementById('duplicateAssessment'),
     deleteAssessment: document.getElementById('deleteAssessment'),
     resetValues: document.getElementById('resetValues'),
+    toggleEdit: document.getElementById('toggleEdit'),
     plusQuarter: document.getElementById('plusQuarter'),
     exportBtn: document.getElementById('exportBtn'),
     importFile: document.getElementById('importFile'),
@@ -248,6 +251,7 @@
   };
 
   let state = loadState();
+  let isEditMode = false;
 
   function uid(){ return Math.random().toString(36).slice(2,10); }
   function todayISO(){ return new Date().toISOString().slice(0,10); }
@@ -320,16 +324,19 @@
     els.date.value = cur.date || '';
     els.nextReviewDate.value = cur.nextReviewDate || '';
     els.areasGrid.innerHTML = '';
+    els.toggleEdit.textContent = isEditMode ? 'Done editing' : 'Edit assessment';
+    const areaManageSection = document.querySelector('#addArea')?.closest('section');
+    if(areaManageSection) areaManageSection.classList.toggle('hidden', !isEditMode);
 
     cur.areas.forEach((area, areaIdx) => {
       const card = document.createElement('article');
       card.className = 'area';
       const score = calcAreaScore(area);
       card.innerHTML = `<div class="areaHead">
-          <h3 contenteditable="true" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+          <h3 contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
-            <button type="button" class="btnDanger" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
+            <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
           </div>
         </div>`;
 
@@ -337,9 +344,9 @@
         const row = document.createElement('label');
         row.className = 'itemRow';
         row.innerHTML = `
-          <span class="itemText" contenteditable="true" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
+          <span class="itemText" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
           <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />
-          <button type="button" class="btnDanger" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
+          <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
 
         const num = row.querySelector('input');
         num.oninput = () => {
@@ -352,7 +359,9 @@
           renderHistory();
         };
 
-        row.querySelector('[data-action="deleteItem"]').onclick = () => {
+        const delBtn = row.querySelector('[data-action="deleteItem"]');
+        delBtn.onclick = () => {
+          if(!isEditMode) return;
           if(cur.areas[areaIdx].items.length <= 1){
             alert('At least one row must remain in an area.');
             return;
@@ -368,7 +377,9 @@
       const addRow = document.createElement('button');
       addRow.type = 'button';
       addRow.textContent = '+ Add row';
+      if(!isEditMode) addRow.classList.add('hidden');
       addRow.onclick = () => {
+        if(!isEditMode) return;
         cur.areas[areaIdx].items.push({ text: `New prompt ${cur.areas[areaIdx].items.length + 1}`, value: null });
         persist();
         render();
@@ -387,6 +398,7 @@
       card.appendChild(meta);
 
       card.querySelector('[data-action="deleteArea"]').onclick = () => {
+        if(!isEditMode) return;
         if(cur.areas.length <= 1){
           alert('At least one area must remain.');
           return;
@@ -400,18 +412,20 @@
       els.areasGrid.appendChild(card);
     });
 
-    els.areasGrid.querySelectorAll('[contenteditable=true]').forEach(el => {
-      el.addEventListener('blur', () => {
-        const ai = Number(el.dataset.ai);
-        if(el.dataset.role === 'name') cur.areas[ai].name = el.textContent.trim() || cur.areas[ai].name;
-        if(el.dataset.role === 'item'){
-          const ii = Number(el.dataset.ii);
-          cur.areas[ai].items[ii].text = el.textContent.trim() || cur.areas[ai].items[ii].text;
-        }
-        persist();
-        render();
+    if(isEditMode){
+      els.areasGrid.querySelectorAll('[contenteditable=true]').forEach(el => {
+        el.addEventListener('blur', () => {
+          const ai = Number(el.dataset.ai);
+          if(el.dataset.role === 'name') cur.areas[ai].name = el.textContent.trim() || cur.areas[ai].name;
+          if(el.dataset.role === 'item'){
+            const ii = Number(el.dataset.ii);
+            cur.areas[ai].items[ii].text = el.textContent.trim() || cur.areas[ai].items[ii].text;
+          }
+          persist();
+          render();
+        });
       });
-    });
+    }
 
     els.title.oninput = ()=>{ cur.title = els.title.value; persist(); renderHistory(); };
     els.date.oninput = ()=>{ cur.date = els.date.value; persist(); renderHistory(); renderChart(); };
@@ -619,6 +633,7 @@
   };
 
   els.addArea.onclick = () => {
+    if(!isEditMode) return;
     const cur = selected();
     const nextNum = cur.areas.length + 1;
     cur.areas.push({
@@ -636,6 +651,11 @@
   };
 
 
+
+  els.toggleEdit.onclick = () => {
+    isEditMode = !isEditMode;
+    render();
+  };
 
   els.exportBtn.onclick = exportData;
   els.importFile.onchange = () => {
