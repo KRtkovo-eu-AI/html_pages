@@ -71,6 +71,9 @@
     .sliderWrap input[type='range']::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid rgba(15,17,23,.45);box-shadow:0 1px 4px rgba(0,0,0,.35)}
     .sliderScale{grid-column:1/-1;display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
     .sliderValue{font-size:12px;color:var(--accent);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+    .targetRow{margin-top:10px;padding:10px;border-radius:10px;border:1px solid rgba(255,210,123,.45);background:linear-gradient(180deg,rgba(255,210,123,.16),rgba(255,210,123,.05))}
+    .targetRow .small{color:var(--accent2);font-weight:600;letter-spacing:.01em}
+    .targetRow .sliderValue{color:var(--accent2)}
     .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
     .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
     .areaActions{display:flex;gap:8px;align-items:center}
@@ -431,11 +434,20 @@
       body.appendChild(addRow);
 
       const meta = document.createElement('div');
-      meta.className = 'itemRow';
-      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" /><span></span>`;
-      meta.querySelector('input').oninput = (e)=>{
-        const v = Number(e.target.value);
-        area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
+      meta.className = 'itemRow targetRow';
+      meta.innerHTML = `<span class="small">Target score for next review (future plan)</span>
+        <div class="sliderWrap">
+          <input type="range" min="1" max="10" step="1" value="${Number.isFinite(area.target) ? area.target : 8}" aria-label="Target score for next review from 1 to 10" />
+          <span class="sliderValue">${Number.isFinite(area.target) ? area.target : '—'}</span>
+          <div class="sliderScale"><span>1 - mess</span><span>10 - satisfied</span></div>
+        </div>
+        <span></span>`;
+      const targetSlider = meta.querySelector('input[type="range"]');
+      const targetValue = meta.querySelector('.sliderValue');
+      targetSlider.oninput = ()=>{
+        const v = Math.min(10, Math.max(1, Number(targetSlider.value)));
+        area.target = Number.isFinite(v) ? v : null;
+        targetValue.textContent = Number.isFinite(v) ? String(v) : '—';
         persist();
         renderTargets();
       };
