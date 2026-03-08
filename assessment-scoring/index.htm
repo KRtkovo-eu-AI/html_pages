@@ -825,7 +825,7 @@
         const fadeDistance = Math.max(1, Math.hypot(p.x - cx, p.y - cy));
         const radial = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, fadeDistance);
         radial.addColorStop(0, hexToRgba(peakColor, 0.42));
-        radial.addColorStop(1, 'rgba(255,255,255,0)');
+        radial.addColorStop(1, hexToRgba(peakColor, 0));
         ctx.fillStyle = radial;
         ctx.fillRect(0, 0, W, H);
       });
