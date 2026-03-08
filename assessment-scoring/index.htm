@@ -91,6 +91,10 @@
     .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
     .targets table{width:100%;border-collapse:collapse;font-size:13px}
     .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
+    .targets th button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:inherit}
+    .targets th button:hover{color:var(--accent)}
+    .sortIndicator{font-size:11px;color:var(--muted);min-width:10px;text-align:center}
+    .sortIndicator.active{color:var(--accent)}
     .footer{margin-top:12px;font-size:12px;color:var(--muted)}
   </style>
 </head>
@@ -147,9 +151,17 @@
           </div>
           <div class="targets panel" style="padding:10px">
             <h3 style="margin:0 0 8px">Priorities & targets</h3>
-            <p class="small" style="margin-top:0">Automatically sorted from lowest-scoring areas. Set your target score for the next assessment or end-of-year checkpoint.</p>
+            <p class="small" style="margin-top:0">Click a table header to sort priorities by that column. Set your target score for the next assessment or end-of-year checkpoint.</p>
             <table>
-              <thead><tr><th>#</th><th>Area</th><th>Score</th><th>Target</th><th>Gap</th></tr></thead>
+              <thead>
+                <tr>
+                  <th><button type="button" data-sort-col="order"># <span class="sortIndicator" data-sort-indicator="order">↕</span></button></th>
+                  <th><button type="button" data-sort-col="name">Area <span class="sortIndicator" data-sort-indicator="name">↕</span></button></th>
+                  <th><button type="button" data-sort-col="score">Score <span class="sortIndicator" data-sort-indicator="score">↕</span></button></th>
+                  <th><button type="button" data-sort-col="target">Target <span class="sortIndicator" data-sort-indicator="target">↕</span></button></th>
+                  <th><button type="button" data-sort-col="gap">Gap <span class="sortIndicator" data-sort-indicator="gap">↕</span></button></th>
+                </tr>
+              </thead>
               <tbody id="targetsBody"></tbody>
             </table>
           </div>
@@ -312,25 +324,28 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
       if(typeof parsed.settings.showComparison !== 'boolean') parsed.settings.showComparison = true;
       if(typeof parsed.settings.comparisonRunId !== 'string') parsed.settings.comparisonRunId = '';
+      if(!parsed.settings.targetsSort || typeof parsed.settings.targetsSort !== 'object') parsed.settings.targetsSort = { key: 'score', direction: 'asc' };
+      if(!['order','name','score','target','gap'].includes(parsed.settings.targetsSort.key)) parsed.settings.targetsSort.key = 'score';
+      if(!['asc','desc'].includes(parsed.settings.targetsSort.direction)) parsed.settings.targetsSort.direction = 'asc';
       parsed.assessments.forEach(a => a.areas?.forEach(area => {
         if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
       }));
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
     }
   }
 
@@ -625,11 +640,27 @@
 
   function renderTargets(){
     const cur = selected();
+    const sortState = state.settings.targetsSort || { key: 'score', direction: 'asc' };
+    const sortMultiplier = sortState.direction === 'desc' ? -1 : 1;
     const rows = cur.areas.map((a, idx) => {
       const score = calcAreaScore(a);
       const target = Number(a.target || 0);
-      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1) };
-    }).sort((a,b)=>a.score-b.score);
+      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1), index: idx };
+    }).sort((a,b)=>{
+      const key = sortState.key;
+      let compare = 0;
+      if(key === 'name') compare = a.name.localeCompare(b.name);
+      else compare = Number(a[key]) - Number(b[key]);
+      if(compare === 0) compare = a.index - b.index;
+      return compare * sortMultiplier;
+    });
+
+    document.querySelectorAll('[data-sort-indicator]').forEach(indicator => {
+      const key = indicator.getAttribute('data-sort-indicator');
+      const isActive = key === sortState.key;
+      indicator.textContent = isActive ? (sortState.direction === 'asc' ? '▲' : '▼') : '↕';
+      indicator.classList.toggle('active', isActive);
+    });
 
     els.targetsBody.innerHTML = rows.map(r => `
       <tr>
@@ -639,6 +670,24 @@
         <td>${r.target || '-'}</td>
         <td style="color:${r.gap>0?'var(--accent2)':(r.gap<0?'var(--ok)':'var(--muted)')}">${r.gap>0?'+':''}${r.gap || 0}</td>
       </tr>`).join('');
+  }
+
+  function initTargetSorting(){
+    document.querySelectorAll('[data-sort-col]').forEach(btn => {
+      btn.onclick = () => {
+        const key = btn.getAttribute('data-sort-col');
+        if(!key) return;
+        const sortState = state.settings.targetsSort || { key: 'score', direction: 'asc' };
+        if(sortState.key === key) sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+        else {
+          sortState.key = key;
+          sortState.direction = key === 'name' ? 'asc' : 'desc';
+        }
+        state.settings.targetsSort = sortState;
+        persist();
+        renderTargets();
+      };
+    });
   }
 
 
@@ -970,6 +1019,7 @@
   };
 
   initChartResizing();
+  initTargetSorting();
   render();
 })();
 </script>
