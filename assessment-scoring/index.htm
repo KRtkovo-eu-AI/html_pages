@@ -77,6 +77,7 @@
     .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
     .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
     .areaActions{display:flex;gap:8px;align-items:center}
+    .areaDone{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(135,227,162,.2);border:1px solid rgba(135,227,162,.55);color:var(--ok);font-weight:700;font-size:13px}
     .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
@@ -337,6 +338,10 @@
     return idx > 0 ? ordered[idx-1] : null;
   }
 
+  function isAreaComplete(area){
+    return area.items.every(item => Number.isFinite(Number(item.value)));
+  }
+
   function renderHistory(){
     els.historyList.innerHTML = '';
     const ordered = [...state.assessments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
@@ -365,6 +370,7 @@
       const card = document.createElement('article');
       card.className = 'area';
       const score = calcAreaScore(area);
+      const areaComplete = isAreaComplete(area);
       const collapseKey = `${cur.id}:${areaIdx}`;
       const isCollapsed = state.settings.collapsed[collapseKey] ?? true;
       card.innerHTML = `<div class="areaHead">
@@ -374,6 +380,7 @@
           </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
+            ${areaComplete ? '<span class="areaDone" title="Area completed" aria-label="Area completed">✔</span>' : ''}
             <button type="button" class="btnDanger ${isEditMode ? '' : 'hidden'}" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
           </div>
         </div>`;
