@@ -54,8 +54,7 @@
     .history button{text-align:left;width:100%}
     .history button.active{border-color:var(--accent);background:rgba(123,193,255,.12)}
     .muted{color:var(--muted)}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media (max-width:860px){.grid{grid-template-columns:1fr}}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
     .area{padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(0,0,0,.18)}
     .areaHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
     .areaTitleWrap{display:flex;align-items:center;gap:8px;min-width:0}
@@ -71,8 +70,9 @@
     .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
-    canvas{width:100%;max-width:860px;height:auto;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:12px}
-    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center}
+    .chartSizer{resize:vertical;overflow:auto;width:780px;height:780px;max-width:100%;margin:0 auto;border:1px dashed rgba(255,255,255,.2);border-radius:12px;padding:2px}
+    canvas{display:block;width:100%;height:100%;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:10px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center;justify-content:center}
     .legendControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
     .targets table{width:100%;border-collapse:collapse;font-size:13px}
@@ -117,11 +117,12 @@
       <section class="panel">
         <div class="chartWrap">
           <div>
-            <canvas id="wheelCanvas" width="780" height="780" aria-label="Wheel chart"></canvas>
+            <div id="chartSizer" class="chartSizer"><canvas id="wheelCanvas" width="780" height="780" aria-label="Wheel chart"></canvas></div>
             <div class="legend" style="margin-top:8px">
               <span><i class="dot" id="currentDot"></i>Current</span>
               <span><i class="dot" id="comparisonDot"></i>Comparison</span>
               <div class="legendControls">
+                <span class="small">Drag chart corner to resize</span>
                 <label class="small">Current color <input id="currentColor" type="color" /></label>
                 <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
               </div>
@@ -154,6 +155,7 @@
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
   const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
+  const DEFAULT_CHART_SIZE = 780;
   const defaultAreas = [
     { name: 'Personal', items:[
       'My basic needs are taken care of.',
@@ -243,6 +245,7 @@
     historyList: document.getElementById('historyList'),
     areasGrid: document.getElementById('areasGrid'),
     targetsBody: document.getElementById('targetsBody'),
+    chartSizer: document.getElementById('chartSizer'),
     wheelCanvas: document.getElementById('wheelCanvas'),
     currentDot: document.getElementById('currentDot'),
     comparisonDot: document.getElementById('comparisonDot'),
@@ -288,18 +291,19 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {} } };
+        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, ...(parsed.settings || {}) };
+      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
+      if(!Number.isFinite(Number(parsed.settings.chartSize))) parsed.settings.chartSize = DEFAULT_CHART_SIZE;
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {} } };
+      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE } };
     }
   }
 
@@ -348,7 +352,7 @@
       card.className = 'area';
       const score = calcAreaScore(area);
       const collapseKey = `${cur.id}:${areaIdx}`;
-      const isCollapsed = !!state.settings.collapsed[collapseKey];
+      const isCollapsed = state.settings.collapsed[collapseKey] ?? true;
       card.innerHTML = `<div class="areaHead">
           <div class="areaTitleWrap">
             <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
@@ -493,6 +497,33 @@
   }
 
 
+
+  function applyChartSize(size){
+    const px = Math.max(320, Math.min(1100, Math.round(Number(size) || DEFAULT_CHART_SIZE)));
+    if(els.chartSizer){
+      els.chartSizer.style.height = px + 'px';
+      els.chartSizer.style.width = px + 'px';
+    }
+    if(els.wheelCanvas){
+      els.wheelCanvas.width = px;
+      els.wheelCanvas.height = px;
+    }
+  }
+
+  function initChartResizing(){
+    if(!els.chartSizer || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      const h = Math.round(els.chartSizer.getBoundingClientRect().height);
+      const px = Math.max(320, Math.min(1100, h));
+      if(px === state.settings.chartSize) return;
+      state.settings.chartSize = px;
+      applyChartSize(px);
+      persist();
+      renderChart();
+    });
+    observer.observe(els.chartSizer);
+  }
+
   function updateColorUI(){
     const current = state.settings?.current || DEFAULT_COLORS.current;
     const comparison = state.settings?.comparison || DEFAULT_COLORS.comparison;
@@ -616,6 +647,9 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
+        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE, ...(state.settings || {}) };
+        if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
+        if(!Number.isFinite(Number(state.settings.chartSize))) state.settings.chartSize = DEFAULT_CHART_SIZE;
         if(!state.selectedId) state.selectedId = state.assessments[0].id;
         persist();
         render();
@@ -643,6 +677,7 @@
     renderEditor();
     renderTargets();
     updateColorUI();
+    applyChartSize(state.settings?.chartSize || DEFAULT_CHART_SIZE);
     renderChart();
   }
 
@@ -736,6 +771,7 @@
     els.importFile.value = '';
   };
 
+  initChartResizing();
   render();
 })();
 </script>
