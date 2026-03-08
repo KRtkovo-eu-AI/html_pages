@@ -452,7 +452,7 @@
       card.innerHTML = `<div class="areaHead">
           <div class="areaTitleWrap">
             <button type="button" class="areaToggle" data-action="toggleArea" data-ai="${areaIdx}" aria-label="Toggle area">${isCollapsed ? '▸' : '▾'}</button>
-            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
+            <h3 class="${isEditMode ? '' : 'toggleable'}" contenteditable="${isEditMode ? 'true' : 'false'}" data-role="name" data-ai="${areaIdx}" style="color:${area.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR}">${escapeHtml(area.name)}</h3>
           </div>
           <div class="areaActions">
             <span class="chip">Score: <strong>${score}</strong>/10</span>
@@ -645,7 +645,7 @@
     const rows = cur.areas.map((a, idx) => {
       const score = calcAreaScore(a);
       const target = Number(a.target || 0);
-      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1), index: idx };
+      return { order: idx + 1, name:a.name, score, target, gap:+(target - score).toFixed(1), index: idx, color: a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR };
     }).sort((a,b)=>{
       const key = sortState.key;
       let compare = 0;
@@ -663,7 +663,7 @@
     });
 
     els.targetsBody.innerHTML = rows.map(r => `
-      <tr>
+      <tr style="color:${r.color}">
         <td>${String(r.order).padStart(2,'0')}</td>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.score}</td>
@@ -768,7 +768,7 @@
       const labelRadius = radius + 36;
       const lx = cx + Math.cos(a)*labelRadius;
       const ly = cy + Math.sin(a)*labelRadius;
-      ctx.fillStyle = 'rgba(232,236,242,.95)';
+      ctx.fillStyle = cur.areas[i].comparisonColor || 'rgba(232,236,242,.95)';
       ctx.font = '15px system-ui';
       const label = `${String(i+1).padStart(2,'0')} ${cur.areas[i].name}`;
       const m = ctx.measureText(label);
@@ -889,12 +889,15 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(state.settings || {}) };
+        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
         if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
         if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
         if(typeof state.settings.showComparison !== 'boolean') state.settings.showComparison = true;
         if(typeof state.settings.comparisonRunId !== 'string') state.settings.comparisonRunId = '';
+        if(!state.settings.targetsSort || typeof state.settings.targetsSort !== 'object') state.settings.targetsSort = { key: 'score', direction: 'asc' };
+        if(!['order','name','score','target','gap'].includes(state.settings.targetsSort.key)) state.settings.targetsSort.key = 'score';
+        if(!['asc','desc'].includes(state.settings.targetsSort.direction)) state.settings.targetsSort.direction = 'asc';
         state.assessments.forEach(a => a.areas?.forEach(area => {
           if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
         }));
