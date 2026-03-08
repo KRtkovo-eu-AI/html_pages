@@ -409,7 +409,7 @@
 
         const slider = row.querySelector('input[type="range"]');
         const sliderValue = row.querySelector('.sliderValue');
-        slider.oninput = () => {
+        const applyItemSliderValue = () => {
           const v = Math.min(10, Math.max(1, Number(slider.value)));
           cur.areas[areaIdx].items[itemIdx].value = Number.isFinite(v) ? v : null;
           sliderValue.textContent = Number.isFinite(v) ? String(v) : '—';
@@ -419,6 +419,10 @@
           renderTargets();
           renderChart();
           renderHistory();
+        };
+        slider.oninput = applyItemSliderValue;
+        slider.onclick = () => {
+          if(scoreValue(cur.areas[areaIdx].items[itemIdx].value) === null) applyItemSliderValue();
         };
 
         const delBtn = row.querySelector('[data-action="deleteItem"]');
@@ -653,10 +657,10 @@
       ctx.fillText(label, lx - m.width/2, ly);
     }
 
-    const currentStroke = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    const currentStroke = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
     currentStroke.addColorStop(0, CURRENT_GRADIENT[0]);
     currentStroke.addColorStop(1, CURRENT_GRADIENT[1]);
-    const currentFill = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+    const currentFill = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
     currentFill.addColorStop(0, 'rgba(139,92,246,0.22)');
     currentFill.addColorStop(1, 'rgba(34,197,94,0.22)');
 
