@@ -60,8 +60,11 @@
     .areaHead{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}
     .area h3{margin:0;font-size:16px}
     .chip{font-size:12px;color:var(--muted)}
-    .itemRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:7px 0}
-    .itemRow input[type='number']{width:74px}
+    .itemRow{display:grid;grid-template-columns:minmax(0,1fr) 82px auto;gap:8px;align-items:center;margin:7px 0}
+    .itemRow input[type='number']{width:82px}
+    .itemText{padding:7px 8px;border:1px dashed rgba(255,255,255,.16);border-radius:8px;min-height:36px}
+    .itemText:focus{outline:none;border-color:rgba(123,193,255,.45);background:rgba(123,193,255,.08)}
+    .areaActions{display:flex;gap:8px;align-items:center}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:minmax(320px,470px) 1fr;gap:12px;align-items:start;margin-bottom:12px}
     @media (max-width:900px){.chartWrap{grid-template-columns:1fr}}
@@ -128,10 +131,9 @@
         <div class="grid" id="areasGrid"></div>
         <section class="panel" style="margin-top:12px">
           <h3 style="margin:0 0 8px">Area management (6-10 recommended)</h3>
-          <p class="small" style="margin:0 0 8px">You can edit area names and prompts directly in the cards above. Here you can quickly add or remove full areas.</p>
+          <p class="small" style="margin:0 0 8px">You can edit area names and prompts directly in the cards above. Add new areas here, and remove each area from its own card.</p>
           <div class="toolbar">
             <button id="addArea">+ Add area</button>
-            <button id="removeLastArea">Remove last area</button>
           </div>
         </section>
         <div class="footer">Tip: Keeping 6-10 areas works best. You can rename and adjust each one over time.</div>
@@ -242,8 +244,7 @@
     plusQuarter: document.getElementById('plusQuarter'),
     exportBtn: document.getElementById('exportBtn'),
     importFile: document.getElementById('importFile'),
-    addArea: document.getElementById('addArea'),
-    removeLastArea: document.getElementById('removeLastArea')
+    addArea: document.getElementById('addArea')
   };
 
   let state = loadState();
@@ -326,15 +327,20 @@
       const score = calcAreaScore(area);
       card.innerHTML = `<div class="areaHead">
           <h3 contenteditable="true" data-role="name" data-ai="${areaIdx}">${escapeHtml(area.name)}</h3>
-          <span class="chip">Score: <strong>${score}</strong>/10</span>
+          <div class="areaActions">
+            <span class="chip">Score: <strong>${score}</strong>/10</span>
+            <button type="button" class="btnDanger" data-action="deleteArea" data-ai="${areaIdx}">Delete area</button>
+          </div>
         </div>`;
 
       area.items.forEach((item, itemIdx) => {
         const row = document.createElement('label');
         row.className = 'itemRow';
         row.innerHTML = `
-          <span contenteditable="true" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
-          <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />`;
+          <span class="itemText" contenteditable="true" data-role="item" data-ai="${areaIdx}" data-ii="${itemIdx}">${escapeHtml(item.text)}</span>
+          <input type="number" min="1" max="10" step="1" value="${Number.isFinite(item.value) ? item.value : ''}" data-ai="${areaIdx}" data-ii="${itemIdx}" />
+          <button type="button" class="btnDanger" data-action="deleteItem" data-ai="${areaIdx}" data-ii="${itemIdx}">✕</button>`;
+
         const num = row.querySelector('input');
         num.oninput = () => {
           const v = num.value === '' ? null : Math.min(10, Math.max(1, Number(num.value)));
@@ -345,12 +351,33 @@
           renderChart();
           renderHistory();
         };
+
+        row.querySelector('[data-action="deleteItem"]').onclick = () => {
+          if(cur.areas[areaIdx].items.length <= 1){
+            alert('At least one row must remain in an area.');
+            return;
+          }
+          cur.areas[areaIdx].items.splice(itemIdx, 1);
+          persist();
+          render();
+        };
+
         card.appendChild(row);
       });
 
+      const addRow = document.createElement('button');
+      addRow.type = 'button';
+      addRow.textContent = '+ Add row';
+      addRow.onclick = () => {
+        cur.areas[areaIdx].items.push({ text: `New prompt ${cur.areas[areaIdx].items.length + 1}`, value: null });
+        persist();
+        render();
+      };
+      card.appendChild(addRow);
+
       const meta = document.createElement('div');
       meta.className = 'itemRow';
-      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" />`;
+      meta.innerHTML = `<span class="small">Target score for next review</span><input type="number" min="1" max="10" step="1" value="${area.target || ''}" /><span></span>`;
       meta.querySelector('input').oninput = (e)=>{
         const v = Number(e.target.value);
         area.target = Number.isFinite(v) ? Math.min(10, Math.max(1, v)) : null;
@@ -358,6 +385,17 @@
         renderTargets();
       };
       card.appendChild(meta);
+
+      card.querySelector('[data-action="deleteArea"]').onclick = () => {
+        if(cur.areas.length <= 1){
+          alert('At least one area must remain.');
+          return;
+        }
+        if(!confirm(`Delete area "${cur.areas[areaIdx].name}"?`)) return;
+        cur.areas.splice(areaIdx, 1);
+        persist();
+        render();
+      };
 
       els.areasGrid.appendChild(card);
     });
@@ -597,17 +635,7 @@
     render();
   };
 
-  els.removeLastArea.onclick = () => {
-    const cur = selected();
-    if(cur.areas.length <= 1){
-      alert('At least one area must remain.');
-      return;
-    }
-    if(!confirm('Remove the last area in the current run?')) return;
-    cur.areas.pop();
-    persist();
-    render();
-  };
+
 
   els.exportBtn.onclick = exportData;
   els.importFile.onchange = () => {
