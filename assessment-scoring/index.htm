@@ -67,10 +67,10 @@
     .areaActions{display:flex;gap:8px;align-items:center}
     .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
-    .chartWrap{display:grid;grid-template-columns:minmax(320px,470px) 1fr;gap:12px;align-items:start;margin-bottom:12px}
-    @media (max-width:900px){.chartWrap{grid-template-columns:1fr}}
-    canvas{width:100%;height:auto;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:12px}
-    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
+    .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
+    canvas{width:100%;max-width:860px;height:auto;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:12px}
+    .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center}
+    .legendControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
     .targets table{width:100%;border-collapse:collapse;font-size:13px}
     .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
@@ -114,10 +114,14 @@
       <section class="panel">
         <div class="chartWrap">
           <div>
-            <canvas id="wheelCanvas" width="560" height="560" aria-label="Wheel chart"></canvas>
+            <canvas id="wheelCanvas" width="780" height="780" aria-label="Wheel chart"></canvas>
             <div class="legend" style="margin-top:8px">
-              <span><i class="dot" style="background:#7bc1ff"></i>Current</span>
-              <span><i class="dot" style="background:#ffd27b"></i>Comparison</span>
+              <span><i class="dot" id="currentDot"></i>Current</span>
+              <span><i class="dot" id="comparisonDot"></i>Comparison</span>
+              <div class="legendControls">
+                <label class="small">Current color <input id="currentColor" type="color" /></label>
+                <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
+              </div>
             </div>
           </div>
           <div class="targets panel" style="padding:10px">
@@ -146,6 +150,7 @@
 <script>
 (() => {
   const STORAGE_KEY = 'assessmentScoring.v1';
+  const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
   const defaultAreas = [
     { name: 'Personal', items:[
       'My basic needs are taken care of.',
@@ -236,6 +241,10 @@
     areasGrid: document.getElementById('areasGrid'),
     targetsBody: document.getElementById('targetsBody'),
     wheelCanvas: document.getElementById('wheelCanvas'),
+    currentDot: document.getElementById('currentDot'),
+    comparisonDot: document.getElementById('comparisonDot'),
+    currentColor: document.getElementById('currentColor'),
+    comparisonColor: document.getElementById('comparisonColor'),
     title: document.getElementById('assessmentTitle'),
     date: document.getElementById('assessmentDate'),
     nextReviewDate: document.getElementById('nextReviewDate'),
@@ -276,16 +285,17 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id };
+        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
+      parsed.settings = { ...DEFAULT_COLORS, ...(parsed.settings || {}) };
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id };
+      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS } };
     }
   }
 
@@ -458,6 +468,16 @@
       </tr>`).join('');
   }
 
+
+  function updateColorUI(){
+    const current = state.settings?.current || DEFAULT_COLORS.current;
+    const comparison = state.settings?.comparison || DEFAULT_COLORS.comparison;
+    if(els.currentDot) els.currentDot.style.background = current;
+    if(els.comparisonDot) els.comparisonDot.style.background = comparison;
+    if(els.currentColor) els.currentColor.value = current;
+    if(els.comparisonColor) els.comparisonColor.value = comparison;
+  }
+
   function renderChart(){
     const cur = selected();
     const compare = comparisonAssessment();
@@ -499,10 +519,22 @@
       ctx.fillText(label, lx - m.width/2, ly);
     }
 
-    drawDataset(cur.areas.map(calcAreaScore), '#7bc1ff', 'rgba(123,193,255,.22)', true);
+    const currentColor = state.settings?.current || DEFAULT_COLORS.current;
+    const comparisonColor = state.settings?.comparison || DEFAULT_COLORS.comparison;
+
+    drawDataset(cur.areas.map(calcAreaScore), currentColor, colorToFill(currentColor, 0.22), true);
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
-      drawDataset(cur.areas.map(a => map.get(a.name) || 0), '#ffd27b', 'rgba(255,210,123,.16)', false);
+      drawDataset(cur.areas.map(a => map.get(a.name) || 0), comparisonColor, colorToFill(comparisonColor, 0.16), false);
+    }
+
+    function colorToFill(hex, alpha){
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+      if(!m) return `rgba(255,255,255,${alpha})`;
+      const r = parseInt(m[1], 16);
+      const g = parseInt(m[2], 16);
+      const b = parseInt(m[3], 16);
+      return `rgba(${r},${g},${b},${alpha})`;
     }
 
     function drawDataset(values, stroke, fill, points){
@@ -586,6 +618,7 @@
     renderHistory();
     renderEditor();
     renderTargets();
+    updateColorUI();
     renderChart();
   }
 
@@ -656,6 +689,20 @@
   els.toggleEdit.onclick = () => {
     isEditMode = !isEditMode;
     render();
+  };
+
+  els.currentColor.oninput = () => {
+    state.settings.current = els.currentColor.value;
+    persist();
+    updateColorUI();
+    renderChart();
+  };
+
+  els.comparisonColor.oninput = () => {
+    state.settings.comparison = els.comparisonColor.value;
+    persist();
+    updateColorUI();
+    renderChart();
   };
 
   els.exportBtn.onclick = exportData;
