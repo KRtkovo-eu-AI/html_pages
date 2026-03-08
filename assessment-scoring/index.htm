@@ -421,9 +421,11 @@
           renderHistory();
         };
         slider.oninput = applyItemSliderValue;
-        slider.onclick = () => {
+        const applyOnInteractionStart = () => {
           if(scoreValue(cur.areas[areaIdx].items[itemIdx].value) === null) applyItemSliderValue();
         };
+        slider.onpointerdown = applyOnInteractionStart;
+        slider.onmousedown = applyOnInteractionStart;
 
         const delBtn = row.querySelector('[data-action="deleteItem"]');
         delBtn.onclick = () => {
