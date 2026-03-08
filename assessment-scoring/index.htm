@@ -86,6 +86,8 @@
     canvas{display:block;width:100%;height:100%;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:10px}
     .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center;justify-content:center}
     .legendControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .legendControls label{display:inline-flex;align-items:center;gap:6px}
+    .legendControls input[type='checkbox']{width:16px;height:16px;padding:0}
     .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
     .targets table{width:100%;border-collapse:collapse;font-size:13px}
     .targets th,.targets td{padding:6px 4px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left}
@@ -135,6 +137,10 @@
               <span><i class="dot" id="currentDot"></i>Current</span>
               <span><i class="dot" id="comparisonDot"></i>Comparison</span>
               <div class="legendControls">
+                <label class="small"><input id="toggleComparison" type="checkbox" checked />Show comparison</label>
+                <label class="small">Compare with
+                  <select id="comparisonRun"></select>
+                </label>
                 <span class="small">Drag chart corner to resize width & height</span>
               </div>
             </div>
@@ -263,6 +269,8 @@
     wheelCanvas: document.getElementById('wheelCanvas'),
     currentDot: document.getElementById('currentDot'),
     comparisonDot: document.getElementById('comparisonDot'),
+    toggleComparison: document.getElementById('toggleComparison'),
+    comparisonRun: document.getElementById('comparisonRun'),
     title: document.getElementById('assessmentTitle'),
     date: document.getElementById('assessmentDate'),
     nextReviewDate: document.getElementById('nextReviewDate'),
@@ -304,23 +312,25 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+      if(typeof parsed.settings.showComparison !== 'boolean') parsed.settings.showComparison = true;
+      if(typeof parsed.settings.comparisonRunId !== 'string') parsed.settings.comparisonRunId = '';
       parsed.assessments.forEach(a => a.areas?.forEach(area => {
         if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
       }));
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '' } };
     }
   }
 
@@ -339,10 +349,54 @@
     return +(nums.reduce((a,b)=>a+b,0) / nums.length).toFixed(1);
   }
 
-  function comparisonAssessment(){
+  function defaultComparisonRunId(){
     const ordered = [...state.assessments].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
     const idx = ordered.findIndex(a => a.id === state.selectedId);
-    return idx > 0 ? ordered[idx-1] : null;
+    if(idx > 0) return ordered[idx-1].id;
+    if(idx >= 0 && ordered.length > 1) return ordered[idx+1]?.id || '';
+    return '';
+  }
+
+  function comparisonAssessment(){
+    if(!state.settings?.showComparison) return null;
+    const cur = selected();
+    const fallbackId = defaultComparisonRunId();
+    const targetId = state.settings?.comparisonRunId || fallbackId;
+    if(!targetId || targetId === cur.id) return null;
+    return state.assessments.find(a => a.id === targetId) || null;
+  }
+
+  function renderComparisonControls(){
+    const cur = selected();
+    const options = state.assessments
+      .filter(a => a.id !== cur.id)
+      .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+
+    const selectedRunId = options.some(a => a.id === state.settings.comparisonRunId)
+      ? state.settings.comparisonRunId
+      : (defaultComparisonRunId() || options[0]?.id || '');
+
+    state.settings.comparisonRunId = selectedRunId;
+    if(els.toggleComparison) els.toggleComparison.checked = state.settings.showComparison !== false;
+
+    if(!els.comparisonRun) return;
+    els.comparisonRun.innerHTML = '';
+    options.forEach(run => {
+      const opt = document.createElement('option');
+      opt.value = run.id;
+      const title = run.title || 'Untitled';
+      opt.textContent = `${title} (${run.date || 'no date'})`;
+      els.comparisonRun.appendChild(opt);
+    });
+    els.comparisonRun.value = selectedRunId;
+    els.comparisonRun.disabled = options.length === 0;
+    if(!options.length){
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No other run available';
+      els.comparisonRun.appendChild(opt);
+      els.comparisonRun.value = '';
+    }
   }
 
   function isAreaComplete(area){
@@ -625,7 +679,10 @@
     const comparisonGradient = areaColors.length
       ? `linear-gradient(90deg, ${areaColors.join(', ')})`
       : DEFAULT_AREA_COMPARISON_COLOR;
-    if(els.comparisonDot) els.comparisonDot.style.background = comparisonGradient;
+    if(els.comparisonDot){
+      els.comparisonDot.style.background = comparisonGradient;
+      els.comparisonDot.style.opacity = state.settings?.showComparison === false ? '.35' : '1';
+    }
   }
 
   function renderChart(){
@@ -783,10 +840,12 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
+        state.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
         if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
         if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
+        if(typeof state.settings.showComparison !== 'boolean') state.settings.showComparison = true;
+        if(typeof state.settings.comparisonRunId !== 'string') state.settings.comparisonRunId = '';
         state.assessments.forEach(a => a.areas?.forEach(area => {
           if(!area.comparisonColor) area.comparisonColor = DEFAULT_AREA_COMPARISON_COLOR;
         }));
@@ -816,6 +875,7 @@
     renderHistory();
     renderEditor();
     renderTargets();
+    renderComparisonControls();
     updateColorUI();
     applyChartDimensions(state.settings?.chartWidth || DEFAULT_CHART_WIDTH, state.settings?.chartHeight || DEFAULT_CHART_HEIGHT);
     renderChart();
@@ -893,6 +953,16 @@
 
 
   els.exportBtn.onclick = exportData;
+  els.toggleComparison.onchange = () => {
+    state.settings.showComparison = els.toggleComparison.checked;
+    persist();
+    render();
+  };
+  els.comparisonRun.onchange = () => {
+    state.settings.comparisonRunId = els.comparisonRun.value || '';
+    persist();
+    render();
+  };
   els.importFile.onchange = () => {
     const f = els.importFile.files?.[0];
     if(f) importData(f);
