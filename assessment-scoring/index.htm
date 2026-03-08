@@ -70,7 +70,7 @@
     .hidden{display:none !important}
     .small{font-size:12px;color:var(--muted)}
     .chartWrap{display:grid;grid-template-columns:1fr;gap:12px;align-items:start;margin-bottom:12px}
-    .chartSizer{resize:vertical;overflow:auto;width:780px;height:780px;max-width:100%;margin:0 auto;border:1px dashed rgba(255,255,255,.2);border-radius:12px;padding:2px}
+    .chartSizer{resize:both;overflow:auto;width:780px;height:780px;max-width:100%;margin:0 auto;border:1px dashed rgba(255,255,255,.2);border-radius:12px;padding:2px}
     canvas{display:block;width:100%;height:100%;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.08);border-radius:10px}
     .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;align-items:center;justify-content:center}
     .legendControls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
@@ -122,7 +122,7 @@
               <span><i class="dot" id="currentDot"></i>Current</span>
               <span><i class="dot" id="comparisonDot"></i>Comparison</span>
               <div class="legendControls">
-                <span class="small">Drag chart corner to resize</span>
+                <span class="small">Drag chart corner to resize width & height</span>
                 <label class="small">Current color <input id="currentColor" type="color" /></label>
                 <label class="small">Comparison color <input id="comparisonColor" type="color" /></label>
               </div>
@@ -156,6 +156,8 @@
   const STORAGE_KEY = 'assessmentScoring.v1';
   const DEFAULT_COLORS = { current: '#7bc1ff', comparison: '#ffd27b' };
   const DEFAULT_CHART_SIZE = 780;
+  const DEFAULT_CHART_WIDTH = 780;
+  const DEFAULT_CHART_HEIGHT = 780;
   const defaultAreas = [
     { name: 'Personal', items:[
       'My basic needs are taken care of.',
@@ -291,19 +293,20 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE } };
+        const init = { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE, ...(parsed.settings || {}) };
+      parsed.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
-      if(!Number.isFinite(Number(parsed.settings.chartSize))) parsed.settings.chartSize = DEFAULT_CHART_SIZE;
+      if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
+      if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE } };
+      return { assessments:[first], selectedId:first.id, settings: { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT } };
     }
   }
 
@@ -498,26 +501,29 @@
 
 
 
-  function applyChartSize(size){
-    const px = Math.max(320, Math.min(1100, Math.round(Number(size) || DEFAULT_CHART_SIZE)));
+  function applyChartDimensions(width, height){
+    const w = Math.max(320, Math.min(1200, Math.round(Number(width) || DEFAULT_CHART_WIDTH)));
+    const h = Math.max(320, Math.min(1200, Math.round(Number(height) || DEFAULT_CHART_HEIGHT)));
     if(els.chartSizer){
-      els.chartSizer.style.height = px + 'px';
-      els.chartSizer.style.width = px + 'px';
+      els.chartSizer.style.width = w + 'px';
+      els.chartSizer.style.height = h + 'px';
     }
     if(els.wheelCanvas){
-      els.wheelCanvas.width = px;
-      els.wheelCanvas.height = px;
+      els.wheelCanvas.width = w;
+      els.wheelCanvas.height = h;
     }
   }
 
   function initChartResizing(){
     if(!els.chartSizer || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      const h = Math.round(els.chartSizer.getBoundingClientRect().height);
-      const px = Math.max(320, Math.min(1100, h));
-      if(px === state.settings.chartSize) return;
-      state.settings.chartSize = px;
-      applyChartSize(px);
+      const box = els.chartSizer.getBoundingClientRect();
+      const w = Math.max(320, Math.min(1200, Math.round(box.width)));
+      const h = Math.max(320, Math.min(1200, Math.round(box.height)));
+      if(w === state.settings.chartWidth && h === state.settings.chartHeight) return;
+      state.settings.chartWidth = w;
+      state.settings.chartHeight = h;
+      applyChartDimensions(w, h);
       persist();
       renderChart();
     });
@@ -647,9 +653,10 @@
         const parsed = JSON.parse(String(r.result));
         if(!parsed.assessments?.length) throw new Error('Invalid JSON');
         state = parsed;
-        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartSize: DEFAULT_CHART_SIZE, ...(state.settings || {}) };
+        state.settings = { ...DEFAULT_COLORS, collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, ...(state.settings || {}) };
         if(!state.settings.collapsed || typeof state.settings.collapsed !== 'object') state.settings.collapsed = {};
-        if(!Number.isFinite(Number(state.settings.chartSize))) state.settings.chartSize = DEFAULT_CHART_SIZE;
+        if(!Number.isFinite(Number(state.settings.chartWidth))) state.settings.chartWidth = Number(state.settings.chartSize) || DEFAULT_CHART_WIDTH;
+        if(!Number.isFinite(Number(state.settings.chartHeight))) state.settings.chartHeight = Number(state.settings.chartSize) || DEFAULT_CHART_HEIGHT;
         if(!state.selectedId) state.selectedId = state.assessments[0].id;
         persist();
         render();
@@ -677,7 +684,7 @@
     renderEditor();
     renderTargets();
     updateColorUI();
-    applyChartSize(state.settings?.chartSize || DEFAULT_CHART_SIZE);
+    applyChartDimensions(state.settings?.chartWidth || DEFAULT_CHART_WIDTH, state.settings?.chartHeight || DEFAULT_CHART_HEIGHT);
     renderChart();
   }
 
