@@ -784,13 +784,13 @@
     currentFill.addColorStop(0, 'rgba(139,92,246,0.22)');
     currentFill.addColorStop(1, 'rgba(34,197,94,0.22)');
 
-    drawDataset(cur.areas.map(calcAreaScore), currentStroke, currentFill, true);
     if(compare){
       const map = new Map(compare.areas.map(a=>[a.name, calcAreaScore(a)]));
       const comparisonValues = cur.areas.map(a => map.get(a.name) || 0);
       const comparisonColors = cur.areas.map(a => a.comparisonColor || DEFAULT_AREA_COMPARISON_COLOR);
       drawComparisonDataset(comparisonValues, comparisonColors);
     }
+    drawDataset(cur.areas.map(calcAreaScore), currentStroke, currentFill, true);
 
     function hexToRgba(hex, alpha){
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
