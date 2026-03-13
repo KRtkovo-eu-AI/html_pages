@@ -95,6 +95,21 @@
     .targets th button:hover{color:var(--accent)}
     .sortIndicator{font-size:11px;color:var(--muted);min-width:10px;text-align:center}
     .sortIndicator.active{color:var(--accent)}
+    .calendarPanel{margin-top:10px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(0,0,0,.18)}
+    .calendarTop{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .calendarControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .calendarStats{font-size:12px;color:var(--muted)}
+    .calendarGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    @media (max-width:1200px){.calendarGrid{grid-template-columns:1fr}}
+    .miniMonth{padding:8px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.02)}
+    .miniMonthHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--muted)}
+    .miniDays{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+    .miniCell{width:100%;aspect-ratio:1/1;border-radius:6px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);padding:0;font-size:0}
+    .miniCell:hover{background:rgba(255,255,255,.12)}
+    .miniCell.done{background:rgba(135,227,162,.28);border-color:rgba(135,227,162,.6)}
+    .miniCell.today{box-shadow:0 0 0 2px rgba(123,193,255,.55) inset}
+    .miniCell.active{box-shadow:0 0 0 2px rgba(255,210,123,.8) inset}
+    .miniCell.blank{opacity:0;pointer-events:none}
     .footer{margin-top:12px;font-size:12px;color:var(--muted)}
   </style>
 </head>
@@ -130,6 +145,18 @@
           <button id="plusQuarter">+3 months</button>
         </div>
         <div class="history" id="historyList"></div>
+        <section class="calendarPanel">
+          <div class="calendarTop">
+            <h3 style="margin:0">Daily run tracker</h3>
+            <div class="calendarControls">
+              <label class="small">Year <input id="calendarYear" type="number" min="1970" max="2100" step="1" style="width:92px" /></label>
+              <button id="calendarToday" type="button">Today</button>
+            </div>
+          </div>
+          <p class="small" style="margin:0 0 8px">Click a day to jump to that run, or create a new run for that date.</p>
+          <div id="calendarStats" class="calendarStats"></div>
+          <div id="calendarGrid" class="calendarGrid"></div>
+        </section>
       </section>
 
       <section class="panel">
@@ -294,14 +321,27 @@
     plusQuarter: document.getElementById('plusQuarter'),
     exportBtn: document.getElementById('exportBtn'),
     importFile: document.getElementById('importFile'),
-    addArea: document.getElementById('addArea')
+    addArea: document.getElementById('addArea'),
+    calendarYear: document.getElementById('calendarYear'),
+    calendarToday: document.getElementById('calendarToday'),
+    calendarStats: document.getElementById('calendarStats'),
+    calendarGrid: document.getElementById('calendarGrid')
   };
 
   let state = loadState();
   let isEditMode = false;
 
   function uid(){ return Math.random().toString(36).slice(2,10); }
+  function pad2(n){ return String(n).padStart(2, '0'); }
   function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function ymd(y,m,d){ return `${y}-${pad2(m)}-${pad2(d)}`; }
+  function daysInMonth(y,m){ return new Date(y, m, 0).getDate(); }
+  function getWeekdayMonFirst(date){ return (date.getDay() + 6) % 7; }
+  function parseDateParts(dateText){
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ''));
+    if(!m) return null;
+    return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  }
 
   function blankAssessment(from){
     const sourceAreas = from?.areas || defaultAreas;
@@ -324,18 +364,20 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if(!raw){
         const first = blankAssessment();
-        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
+        const init = { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, calendarYear: new Date().getFullYear() } };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(init));
         return init;
       }
       const parsed = JSON.parse(raw);
       if(!parsed.assessments?.length) throw new Error('invalid');
-      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, ...(parsed.settings || {}) };
+      parsed.settings = { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, calendarYear: new Date().getFullYear(), ...(parsed.settings || {}) };
       if(!parsed.settings.collapsed || typeof parsed.settings.collapsed !== 'object') parsed.settings.collapsed = {};
       if(!Number.isFinite(Number(parsed.settings.chartWidth))) parsed.settings.chartWidth = Number(parsed.settings.chartSize) || DEFAULT_CHART_WIDTH;
       if(!Number.isFinite(Number(parsed.settings.chartHeight))) parsed.settings.chartHeight = Number(parsed.settings.chartSize) || DEFAULT_CHART_HEIGHT;
       if(typeof parsed.settings.showComparison !== 'boolean') parsed.settings.showComparison = true;
       if(typeof parsed.settings.comparisonRunId !== 'string') parsed.settings.comparisonRunId = '';
+      if(!Number.isFinite(Number(parsed.settings.calendarYear))) parsed.settings.calendarYear = new Date().getFullYear();
+      parsed.settings.calendarYear = Math.max(1970, Math.min(2100, Math.round(Number(parsed.settings.calendarYear))));
       if(!parsed.settings.targetsSort || typeof parsed.settings.targetsSort !== 'object') parsed.settings.targetsSort = { key: 'score', direction: 'asc' };
       if(!['order','name','score','target','gap'].includes(parsed.settings.targetsSort.key)) parsed.settings.targetsSort.key = 'score';
       if(!['asc','desc'].includes(parsed.settings.targetsSort.direction)) parsed.settings.targetsSort.direction = 'asc';
@@ -345,7 +387,7 @@
       return parsed;
     }catch(_){
       const first = blankAssessment();
-      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' } } };
+      return { assessments:[first], selectedId:first.id, settings: { collapsed: {}, chartWidth: DEFAULT_CHART_WIDTH, chartHeight: DEFAULT_CHART_HEIGHT, showComparison: true, comparisonRunId: '', targetsSort: { key: 'score', direction: 'asc' }, calendarYear: new Date().getFullYear() } };
     }
   }
 
@@ -428,6 +470,95 @@
       btn.innerHTML = `<strong>${escapeHtml(a.title || 'Untitled')}</strong><br><span class="small">${a.date || 'no date'} · average ${avg}</span>`;
       btn.onclick = () => { state.selectedId = a.id; persist(); render(); };
       els.historyList.appendChild(btn);
+    }
+  }
+
+  function runsByDateMap(year){
+    const map = new Map();
+    state.assessments.forEach((run) => {
+      const parts = parseDateParts(run.date);
+      if(!parts || parts.y !== year) return;
+      const key = ymd(parts.y, parts.m, parts.d);
+      if(!map.has(key)) map.set(key, []);
+      map.get(key).push(run);
+    });
+    return map;
+  }
+
+  function createRunForDate(dateISO){
+    const next = blankAssessment(selected());
+    next.date = dateISO;
+    next.title = `Scoring ${dateISO}`;
+    state.assessments.push(next);
+    state.selectedId = next.id;
+    persist();
+    render();
+  }
+
+  function selectOrCreateRunForDate(dateISO){
+    const match = state.assessments.find(a => a.date === dateISO);
+    if(match){
+      state.selectedId = match.id;
+      persist();
+      render();
+      return;
+    }
+    createRunForDate(dateISO);
+  }
+
+  function renderRunCalendar(){
+    const year = state.settings.calendarYear;
+    const marksByDate = runsByDateMap(year);
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const weekdayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const selectedRun = selected();
+    const selectedDate = parseDateParts(selectedRun.date);
+    const activeDateKey = selectedDate ? ymd(selectedDate.y, selectedDate.m, selectedDate.d) : '';
+    const today = new Date();
+    const todayKey = ymd(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    const doneCount = marksByDate.size;
+
+    els.calendarStats.textContent = `${doneCount} / ${year % 4 === 0 ? 366 : 365} days with at least one run`;
+    els.calendarYear.value = String(year);
+    els.calendarGrid.innerHTML = '';
+
+    for(let month = 1; month <= 12; month++){
+      const wrap = document.createElement('section');
+      wrap.className = 'miniMonth';
+
+      const head = document.createElement('div');
+      head.className = 'miniMonthHead';
+      head.innerHTML = `<strong>${monthNames[month - 1]}</strong><span>${weekdayNames.join(' ')}</span>`;
+      wrap.appendChild(head);
+
+      const grid = document.createElement('div');
+      grid.className = 'miniDays';
+      const lead = getWeekdayMonFirst(new Date(year, month - 1, 1));
+      for(let i = 0; i < lead; i++){
+        const blank = document.createElement('span');
+        blank.className = 'miniCell blank';
+        grid.appendChild(blank);
+      }
+
+      const dim = daysInMonth(year, month);
+      for(let day = 1; day <= dim; day++){
+        const key = ymd(year, month, day);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'miniCell';
+        btn.title = marksByDate.has(key)
+          ? `${key} · ${marksByDate.get(key).length} run(s)`
+          : `${key} · click to create run`;
+        btn.setAttribute('aria-label', btn.title);
+        if(marksByDate.has(key)) btn.classList.add('done');
+        if(key === todayKey) btn.classList.add('today');
+        if(key === activeDateKey) btn.classList.add('active');
+        btn.onclick = () => selectOrCreateRunForDate(key);
+        grid.appendChild(btn);
+      }
+
+      wrap.appendChild(grid);
+      els.calendarGrid.appendChild(wrap);
     }
   }
 
@@ -1000,6 +1131,7 @@
     renderEditor();
     renderTargets();
     renderComparisonControls();
+    renderRunCalendar();
     updateColorUI();
     applyChartDimensions(state.settings?.chartWidth || DEFAULT_CHART_WIDTH, state.settings?.chartHeight || DEFAULT_CHART_HEIGHT);
     renderChart();
@@ -1091,6 +1223,20 @@
     const f = els.importFile.files?.[0];
     if(f) importData(f);
     els.importFile.value = '';
+  };
+
+  els.calendarYear.onchange = () => {
+    const nextYear = Math.max(1970, Math.min(2100, Math.round(Number(els.calendarYear.value) || new Date().getFullYear())));
+    state.settings.calendarYear = nextYear;
+    persist();
+    renderRunCalendar();
+  };
+
+  els.calendarToday.onclick = () => {
+    const today = new Date();
+    state.settings.calendarYear = today.getFullYear();
+    persist();
+    selectOrCreateRunForDate(todayISO());
   };
 
   initChartResizing();
