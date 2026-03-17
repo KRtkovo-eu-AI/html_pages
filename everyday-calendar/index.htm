@@ -621,10 +621,12 @@
       dataExportTitle: "Export",
       dataExportHint: "Copy the JSON and keep it as a backup.",
       dataImportTitle: "Import",
-      dataImportHint: "Paste JSON (export) and click Apply. This overwrites current data. (Import can read older formats too.)",
+      dataImportHint: "Paste JSON (export) and click Apply. Import adds new calendars and asks before overwriting matching ones. (Import can read older formats too.)",
       apply: "Apply",
       dismiss: "Close",
       importFailed: (msg) => `Import failed: ${msg}`,
+      importOverwriteConfirm: (name) => `Calendar "${name}" already exists. Overwrite it with imported data?`,
+      importResult: (added, overwritten, skipped) => `Import done: added ${added}, overwritten ${overwritten}, skipped ${skipped}.`,
 
       newTabName: "New tab",
       tabFallbackName: "Tab",
@@ -686,10 +688,12 @@
       dataExportTitle: "Export",
       dataExportHint: "Zkopíruj JSON a ulož si ho jako zálohu.",
       dataImportTitle: "Import",
-      dataImportHint: "Vlož JSON (export) a klikni Použít. Přepíše to současná data. (Import umí i starý formát.)",
+      dataImportHint: "Vlož JSON (export) a klikni Použít. Import přidá nové kalendáře a u shodných se zeptá na přepsání. (Import umí i starý formát.)",
       apply: "Použít",
       dismiss: "Zavřít",
       importFailed: (msg) => `Import se nepovedl: ${msg}`,
+      importOverwriteConfirm: (name) => `Kalendář "${name}" už existuje. Chceš ho přepsat importovanými daty?`,
+      importResult: (added, overwritten, skipped) => `Import hotov: přidáno ${added}, přepsáno ${overwritten}, přeskočeno ${skipped}.`,
 
       newTabName: "Nová záložka",
       tabFallbackName: "Záložka",
@@ -1561,6 +1565,49 @@
     if(dlgData.open) dlgData.close();
   }
 
+  function mergeImportedTabs(importedState){
+    let added = 0;
+    let overwritten = 0;
+    let skipped = 0;
+
+    const existingById = new Map(state.tabs.map(t => [t.id, t]));
+    const existingByName = new Map(state.tabs.map(t => [String(t.name || "").toLowerCase(), t]));
+
+    for(const importedTab of importedState.tabs){
+      const byId = existingById.get(importedTab.id) || null;
+      const byName = existingByName.get(String(importedTab.name || "").toLowerCase()) || null;
+      const target = byId || byName;
+
+      if(!target){
+        state.tabs.push(importedTab);
+        existingById.set(importedTab.id, importedTab);
+        existingByName.set(String(importedTab.name || "").toLowerCase(), importedTab);
+        added++;
+        continue;
+      }
+
+      const shouldOverwrite = confirm(td("importOverwriteConfirm", target.name || importedTab.name || td("tabFallbackName")));
+      if(!shouldOverwrite){
+        skipped++;
+        continue;
+      }
+
+      const idx = state.tabs.findIndex(t => t.id === target.id);
+      if(idx >= 0){
+        const replacement = JSON.parse(JSON.stringify(importedTab));
+        replacement.id = target.id;
+        state.tabs[idx] = replacement;
+        existingById.set(target.id, replacement);
+        existingByName.set(String(replacement.name || "").toLowerCase(), replacement);
+        overwritten++;
+      } else {
+        skipped++;
+      }
+    }
+
+    return { added, overwritten, skipped };
+  }
+
   function applyDataDialog(){
     if(dataDlgMode === "export"){
       closeDataDialog();
@@ -1569,11 +1616,17 @@
     try{
       const incoming = JSON.parse(dataArea.value);
       const normalized = normalizeState(incoming);
-      state = normalized;
+      const result = mergeImportedTabs(normalized);
+
+      if(!state.tabs.some(t => t.id === state.activeTabId)){
+        state.activeTabId = state.tabs[0]?.id || defaultState().activeTabId;
+      }
+
       saveState();
       closeDataDialog();
       lastClickedDateKey = null;
       renderAll();
+      alert(td("importResult", result.added, result.overwritten, result.skipped));
     }catch(e){
       alert(td("importFailed", e.message));
     }
