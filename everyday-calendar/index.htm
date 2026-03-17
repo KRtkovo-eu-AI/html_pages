@@ -1033,9 +1033,26 @@
     return span;
   }
 
+  function collectAvailableYears(){
+    const years = new Set();
+
+    // Keep quick-access around current year for regular use.
+    for(let y = currentYear - 2; y <= currentYear + 2; y++) years.add(y);
+
+    // Add years discovered in stored/imported data (including old years).
+    for(const tab of (state.tabs || [])){
+      const marks = (tab && tab.marks && typeof tab.marks === "object") ? tab.marks : {};
+      for(const yearKey of Object.keys(marks)){
+        const y = Number(yearKey);
+        if(Number.isInteger(y) && y >= 1 && y <= 9999) years.add(y);
+      }
+    }
+
+    return [...years].sort((a,b) => a - b);
+  }
+
   function renderYearSelect(){
-    const years = [];
-    for(let y = currentYear - 2; y <= currentYear + 2; y++) years.push(y);
+    const years = collectAvailableYears();
 
     yearSelect.innerHTML = "";
     years.forEach(y => {
