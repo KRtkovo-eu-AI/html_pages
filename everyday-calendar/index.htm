@@ -428,6 +428,13 @@
       padding: 10px;
       border-radius: 12px;
     }
+    .dataActions{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      align-items:center;
+      justify-content:space-between;
+    }
     .dlgFoot{
       padding: 12px 14px 14px;
       border-top: 1px solid rgba(255,255,255,.08);
@@ -550,6 +557,12 @@
     </div>
     <div class="dlgBody">
       <div class="hint" id="dlgDataHint"></div>
+      <div class="dataActions">
+        <button id="btnDownloadData" type="button"></button>
+        <button id="btnLoadDataFile" type="button"></button>
+        <input id="dataFileInput" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="hint" id="dlgDataFileHint"></div>
       <textarea id="dataArea" spellcheck="false"></textarea>
     </div>
     <div class="dlgFoot">
@@ -619,9 +632,14 @@
       deleteTypeTitle: "Delete type",
 
       dataExportTitle: "Export",
-      dataExportHint: "Copy the JSON and keep it as a backup.",
+      dataExportHint: "Download a JSON backup file, or copy the JSON text below and keep it as a backup.",
       dataImportTitle: "Import",
-      dataImportHint: "Paste JSON (export) and click Apply. Import adds new calendars and asks before overwriting matching ones. (Import can read older formats too.)",
+      dataImportHint: "Choose a JSON file or paste JSON text below, then click Apply. Import adds new calendars and asks before overwriting matching ones. (Import can read older formats too.)",
+      downloadFile: "Download JSON file",
+      loadFile: "Choose JSON file",
+      noFileChosen: "No file selected.",
+      fileLoaded: (name) => `Loaded file: ${name}`,
+      fileReadFailed: (msg) => `Could not read file: ${msg}`,
       apply: "Apply",
       dismiss: "Close",
       importFailed: (msg) => `Import failed: ${msg}`,
@@ -686,9 +704,14 @@
       deleteTypeTitle: "Smazat typ",
 
       dataExportTitle: "Export",
-      dataExportHint: "Zkopíruj JSON a ulož si ho jako zálohu.",
+      dataExportHint: "Stáhni si zálohu jako JSON soubor, nebo zkopíruj JSON text níže a ulož si ho jako zálohu.",
       dataImportTitle: "Import",
-      dataImportHint: "Vlož JSON (export) a klikni Použít. Import přidá nové kalendáře a u shodných se zeptá na přepsání. (Import umí i starý formát.)",
+      dataImportHint: "Vyber JSON soubor nebo vlož JSON text níže a klikni Použít. Import přidá nové kalendáře a u shodných se zeptá na přepsání. (Import umí i starý formát.)",
+      downloadFile: "Stáhnout JSON soubor",
+      loadFile: "Vybrat JSON soubor",
+      noFileChosen: "Není vybraný žádný soubor.",
+      fileLoaded: (name) => `Načten soubor: ${name}`,
+      fileReadFailed: (msg) => `Soubor nešlo načíst: ${msg}`,
       apply: "Použít",
       dismiss: "Zavřít",
       importFailed: (msg) => `Import se nepovedl: ${msg}`,
@@ -982,7 +1005,11 @@
   const dlgData = document.getElementById("dlgData");
   const dlgDataTitle = document.getElementById("dlgDataTitle");
   const dlgDataHint = document.getElementById("dlgDataHint");
+  const dlgDataFileHint = document.getElementById("dlgDataFileHint");
   const dataArea = document.getElementById("dataArea");
+  const btnDownloadData = document.getElementById("btnDownloadData");
+  const btnLoadDataFile = document.getElementById("btnLoadDataFile");
+  const dataFileInput = document.getElementById("dataFileInput");
   const btnDataApply = document.getElementById("btnDataApply");
   const btnDataCancel = document.getElementById("btnDataCancel");
   const btnCloseDataDlg = document.getElementById("btnCloseDataDlg");
@@ -1611,12 +1638,51 @@
   // ---------- Data dialog (export/import) ----------
   let dataDlgMode = "export"; // "export" | "import"
 
+  function getExportJson(){
+    return JSON.stringify(state, null, 2);
+  }
+
+  function getExportFileName(){
+    const today = getTodayKey();
+    const tab = getActiveTab();
+    const safeName = String(tab?.name || "calendar")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "") || "calendar";
+    return `everyday-calendar-${safeName}-${today}.json`;
+  }
+
+  function downloadExportFile(){
+    const blob = new Blob([getExportJson()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = getExportFileName();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function setDataDialogModeControls(mode){
+    const isExport = mode === "export";
+    btnDownloadData.style.display = isExport ? "" : "none";
+    btnLoadDataFile.style.display = isExport ? "none" : "";
+    dataFileInput.value = "";
+    dlgDataFileHint.textContent = isExport ? "" : td("noFileChosen");
+  }
+
   function openDataDialog(mode){
     dataDlgMode = mode;
+    btnDownloadData.textContent = td("downloadFile");
+    btnLoadDataFile.textContent = td("loadFile");
+    setDataDialogModeControls(mode);
+
     if(mode === "export"){
       dlgDataTitle.textContent = td("dataExportTitle");
       dlgDataHint.textContent = td("dataExportHint");
-      dataArea.value = JSON.stringify(state, null, 2);
+      dataArea.value = getExportJson();
       dataArea.readOnly = true;
       btnDataApply.textContent = td("dismiss");
     } else {
@@ -1627,8 +1693,12 @@
       btnDataApply.textContent = td("apply");
     }
     dlgData.showModal();
-    dataArea.focus();
-    if(mode === "export") dataArea.select();
+    if(mode === "export"){
+      dataArea.focus();
+      dataArea.select();
+    } else {
+      btnLoadDataFile.focus();
+    }
   }
 
   function closeDataDialog(){
@@ -1771,6 +1841,27 @@
 
   btnExport.addEventListener("click", () => openDataDialog("export"));
   btnImport.addEventListener("click", () => openDataDialog("import"));
+  btnDownloadData.addEventListener("click", downloadExportFile);
+  btnLoadDataFile.addEventListener("click", () => dataFileInput.click());
+  dataFileInput.addEventListener("change", () => {
+    const file = dataFileInput.files && dataFileInput.files[0];
+    if(!file){
+      dlgDataFileHint.textContent = td("noFileChosen");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      dataArea.value = String(reader.result || "");
+      dlgDataFileHint.textContent = td("fileLoaded", file.name);
+      dataArea.focus();
+    });
+    reader.addEventListener("error", () => {
+      const msg = reader.error?.message || file.name;
+      dlgDataFileHint.textContent = td("fileReadFailed", msg);
+    });
+    reader.readAsText(file);
+  });
   btnDataApply.addEventListener("click", applyDataDialog);
   btnDataCancel.addEventListener("click", closeDataDialog);
   btnCloseDataDlg.addEventListener("click", closeDataDialog);
