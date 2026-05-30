@@ -428,6 +428,13 @@
       padding: 10px;
       border-radius: 12px;
     }
+    .dataActions{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      align-items:center;
+      justify-content:space-between;
+    }
     .dlgFoot{
       padding: 12px 14px 14px;
       border-top: 1px solid rgba(255,255,255,.08);
@@ -550,6 +557,12 @@
     </div>
     <div class="dlgBody">
       <div class="hint" id="dlgDataHint"></div>
+      <div class="dataActions">
+        <button id="btnDownloadData" type="button"></button>
+        <button id="btnLoadDataFile" type="button"></button>
+        <input id="dataFileInput" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="hint" id="dlgDataFileHint"></div>
       <textarea id="dataArea" spellcheck="false"></textarea>
     </div>
     <div class="dlgFoot">
@@ -561,7 +574,7 @@
 <script>
 (() => {
   const STORAGE_KEY = "everyday_calendar_v1";
-  const APP_VERSION = 2;
+  const APP_VERSION = 3;
 
   // Language setting (separate from app state)
   const LANG_KEY = "everyday_calendar_lang_v1";
@@ -619,9 +632,14 @@
       deleteTypeTitle: "Delete type",
 
       dataExportTitle: "Export",
-      dataExportHint: "Copy the JSON and keep it as a backup.",
+      dataExportHint: "Download a JSON backup file, or copy the JSON text below and keep it as a backup.",
       dataImportTitle: "Import",
-      dataImportHint: "Paste JSON (export) and click Apply. Import adds new calendars and asks before overwriting matching ones. (Import can read older formats too.)",
+      dataImportHint: "Choose a JSON file or paste JSON text below, then click Apply. Import adds new calendars and asks before overwriting matching ones. (Import can read older formats too.)",
+      downloadFile: "Download JSON file",
+      loadFile: "Choose JSON file",
+      noFileChosen: "No file selected.",
+      fileLoaded: (name) => `Loaded file: ${name}`,
+      fileReadFailed: (msg) => `Could not read file: ${msg}`,
       apply: "Apply",
       dismiss: "Close",
       importFailed: (msg) => `Import failed: ${msg}`,
@@ -686,9 +704,14 @@
       deleteTypeTitle: "Smazat typ",
 
       dataExportTitle: "Export",
-      dataExportHint: "Zkopíruj JSON a ulož si ho jako zálohu.",
+      dataExportHint: "Stáhni si zálohu jako JSON soubor, nebo zkopíruj JSON text níže a ulož si ho jako zálohu.",
       dataImportTitle: "Import",
-      dataImportHint: "Vlož JSON (export) a klikni Použít. Import přidá nové kalendáře a u shodných se zeptá na přepsání. (Import umí i starý formát.)",
+      dataImportHint: "Vyber JSON soubor nebo vlož JSON text níže a klikni Použít. Import přidá nové kalendáře a u shodných se zeptá na přepsání. (Import umí i starý formát.)",
+      downloadFile: "Stáhnout JSON soubor",
+      loadFile: "Vybrat JSON soubor",
+      noFileChosen: "Není vybraný žádný soubor.",
+      fileLoaded: (name) => `Načten soubor: ${name}`,
+      fileReadFailed: (msg) => `Soubor nešlo načíst: ${msg}`,
       apply: "Použít",
       dismiss: "Zavřít",
       importFailed: (msg) => `Import se nepovedl: ${msg}`,
@@ -828,10 +851,11 @@
           const y = String(year);
           cleanMarks[y] = {};
           for(const [dateKey, val] of Object.entries(yearObj)){
-            if(val === true){
-              cleanMarks[y][dateKey] = labels[0].id;
-            } else if(typeof val === "string" && val.trim()){
-              cleanMarks[y][dateKey] = val;
+            const labelIds = normalizeMarkValue(val, labels);
+            if(labelIds.length === 1){
+              cleanMarks[y][dateKey] = labelIds[0];
+            } else if(labelIds.length > 1){
+              cleanMarks[y][dateKey] = labelIds;
             }
           }
           if(Object.keys(cleanMarks[y]).length === 0) delete cleanMarks[y];
@@ -895,6 +919,41 @@
     return fallback;
   }
 
+  function normalizeMarkValue(markValue, labels){
+    if(!markValue) return [];
+    const fallback = labels[0]?.id || "default";
+    const rawIds = Array.isArray(markValue)
+      ? markValue
+      : [(markValue === true) ? fallback : markValue];
+    const seen = new Set();
+    const ids = [];
+    rawIds.forEach(id => {
+      const labelId = String(id || "").trim();
+      if(!labelId || seen.has(labelId)) return;
+      // Keep unknown imported label IDs so data is not silently destroyed; they render with the tab fallback color/name.
+      seen.add(labelId);
+      ids.push(labelId);
+    });
+    return ids;
+  }
+
+  function storeMarkValue(ids){
+    if(!ids.length) return null;
+    return ids.length === 1 ? ids[0] : ids;
+  }
+
+  function getMarkLabelIds(tab, markValue){
+    return normalizeMarkValue(markValue, tab.labels || []);
+  }
+
+  function getLabelsForMark(tab, markValue){
+    return getMarkLabelIds(tab, markValue).map(labelId => getLabelById(tab, labelId) || {
+      id: labelId,
+      name: labelId,
+      color: tab.color || "#82b4ff"
+    });
+  }
+
   function setActiveLabelId(tab, labelId){
     if(tab.labels.some(l => l.id === labelId)){
       tab.activeLabelId = labelId;
@@ -946,7 +1005,11 @@
   const dlgData = document.getElementById("dlgData");
   const dlgDataTitle = document.getElementById("dlgDataTitle");
   const dlgDataHint = document.getElementById("dlgDataHint");
+  const dlgDataFileHint = document.getElementById("dlgDataFileHint");
   const dataArea = document.getElementById("dataArea");
+  const btnDownloadData = document.getElementById("btnDownloadData");
+  const btnLoadDataFile = document.getElementById("btnLoadDataFile");
+  const dataFileInput = document.getElementById("dataFileInput");
   const btnDataApply = document.getElementById("btnDataApply");
   const btnDataCancel = document.getElementById("btnDataCancel");
   const btnCloseDataDlg = document.getElementById("btnCloseDataDlg");
@@ -1127,10 +1190,10 @@
     let total = 0;
 
     for(const v of Object.values(marks)){
-      const labelId = (v === true) ? (tab.labels[0]?.id) : v;
-      if(typeof labelId === "string"){
+      const labelIds = getMarkLabelIds(tab, v);
+      if(labelIds.length){
         total++;
-        counts.set(labelId, (counts.get(labelId) || 0) + 1);
+        labelIds.forEach(labelId => counts.set(labelId, (counts.get(labelId) || 0) + 1));
       }
     }
     return { total, counts };
@@ -1202,10 +1265,28 @@
   }
 
   function getCellColor(tab, markValue){
-    if(!markValue) return "rgba(255,255,255,.02)";
-    const labelId = (markValue === true) ? (tab.labels[0]?.id) : markValue;
-    const label = getLabelById(tab, labelId);
-    return (label ? label.color : tab.color);
+    const labels = getLabelsForMark(tab, markValue);
+    if(!labels.length) return "rgba(255,255,255,.02)";
+    if(labels.length === 1) return labels[0].color;
+    const stops = labels.map((label, idx) => {
+      const start = Math.round((idx / labels.length) * 100);
+      const end = Math.round(((idx + 1) / labels.length) * 100);
+      return `${label.color} ${start}% ${end}%`;
+    });
+    return `linear-gradient(135deg, ${stops.join(", ")})`;
+  }
+
+  function getCellTitle(tab, dateLabel, markValue){
+    const labels = getLabelsForMark(tab, markValue);
+    if(!labels.length) return dateLabel;
+    return `${dateLabel}\n${labels.map(l => l.name).join("\n")}`;
+  }
+
+  function getDateLabelFromKey(key){
+    const date = parseYmdToLocalDate(key);
+    if(Number.isNaN(date.getTime())) return key;
+    const monthNames = td("months");
+    return td("dayAria", date.getDate(), monthNames[date.getMonth()], date.getFullYear());
   }
 
   function renderCalendar(){
@@ -1263,8 +1344,9 @@
         cell.dataset.key = key;
 
         const aria = td("dayAria", d, monthNames[m-1], selectedYear);
-        cell.setAttribute("aria-label", aria);
-        cell.title = aria;
+        const cellTitle = getCellTitle(tab, aria, val);
+        cell.setAttribute("aria-label", cellTitle);
+        cell.title = cellTitle;
 
         if(done){
           cell.style.background = getCellColor(tab, val);
@@ -1289,7 +1371,7 @@
     const activeLabelId = getActiveLabelId(tab);
 
     const currentVal = marks[key];
-    const currentLabelId = (currentVal === true) ? (tab.labels[0]?.id) : currentVal;
+    const currentLabelIds = getMarkLabelIds(tab, currentVal);
 
     if(ev.shiftKey && lastClickedDateKey && lastClickedDateKey.slice(0,4) === String(selectedYear)){
       const a = parseYmdToLocalDate(lastClickedDateKey);
@@ -1297,19 +1379,28 @@
       const start = a < b ? a : b;
       const end = a < b ? b : a;
 
-      const willSet = currentLabelId !== activeLabelId;
+      const willSet = !currentLabelIds.includes(activeLabelId);
 
       const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
       while(cur <= end){
         if(cur.getFullYear() !== selectedYear) break;
         const k = ymd(cur.getFullYear(), cur.getMonth()+1, cur.getDate());
-        if(willSet) marks[k] = activeLabelId;
+        const ids = getMarkLabelIds(tab, marks[k]);
+        const nextIds = willSet
+          ? [...ids, activeLabelId].filter((id, idx, arr) => arr.indexOf(id) === idx)
+          : ids.filter(id => id !== activeLabelId);
+        const nextValue = storeMarkValue(nextIds);
+        if(nextValue) marks[k] = nextValue;
         else delete marks[k];
         cur.setDate(cur.getDate() + 1);
       }
     } else {
-      if(currentLabelId === activeLabelId) delete marks[key];
-      else marks[key] = activeLabelId;
+      const nextIds = currentLabelIds.includes(activeLabelId)
+        ? currentLabelIds.filter(id => id !== activeLabelId)
+        : [...currentLabelIds, activeLabelId];
+      const nextValue = storeMarkValue(nextIds);
+      if(nextValue) marks[key] = nextValue;
+      else delete marks[key];
     }
 
     lastClickedDateKey = key;
@@ -1330,10 +1421,15 @@
       const val = marks[key];
       const done = !!val;
 
+      const dateLabel = getDateLabelFromKey(key);
+      const cellTitle = getCellTitle(tab, dateLabel, val);
+
       cell.classList.toggle("done", done);
       cell.style.background = done ? getCellColor(tab, val) : "rgba(255,255,255,.02)";
       cell.style.color = done ? "rgba(0,0,0,.65)" : "rgba(255,255,255,.45)";
       cell.style.borderColor = done ? "rgba(0,0,0,.22)" : "rgba(255,255,255,.10)";
+      cell.title = cellTitle;
+      cell.setAttribute("aria-label", cellTitle);
 
       cell.classList.toggle("today", (key === todayKey && selectedYear === now.getFullYear()));
     });
@@ -1475,11 +1571,12 @@
           for(const yearObj of Object.values(tab.marks || {})){
             if(!yearObj || typeof yearObj !== "object") continue;
             for(const [k, v] of Object.entries(yearObj)){
-              if(typeof v === "string" && removed.includes(v)){
-                yearObj[k] = labels[0].id;
-              } else if(v === true) {
-                yearObj[k] = labels[0].id;
-              }
+              const ids = normalizeMarkValue(v, tab.labels || []);
+              const nextIds = ids.map(id => removed.includes(id) ? labels[0].id : id)
+                .filter((id, idx, arr) => arr.indexOf(id) === idx);
+              const nextValue = storeMarkValue(nextIds);
+              if(nextValue) yearObj[k] = nextValue;
+              else delete yearObj[k];
             }
           }
         }
@@ -1541,12 +1638,44 @@
   // ---------- Data dialog (export/import) ----------
   let dataDlgMode = "export"; // "export" | "import"
 
+  function getExportJson(){
+    return JSON.stringify(state, null, 2);
+  }
+
+  function getExportFileName(){
+    return `everyday-calendar-${getTodayKey()}.json`;
+  }
+
+  function downloadExportFile(){
+    const blob = new Blob([getExportJson()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = getExportFileName();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function setDataDialogModeControls(mode){
+    const isExport = mode === "export";
+    btnDownloadData.style.display = isExport ? "" : "none";
+    btnLoadDataFile.style.display = isExport ? "none" : "";
+    dataFileInput.value = "";
+    dlgDataFileHint.textContent = isExport ? "" : td("noFileChosen");
+  }
+
   function openDataDialog(mode){
     dataDlgMode = mode;
+    btnDownloadData.textContent = td("downloadFile");
+    btnLoadDataFile.textContent = td("loadFile");
+    setDataDialogModeControls(mode);
+
     if(mode === "export"){
       dlgDataTitle.textContent = td("dataExportTitle");
       dlgDataHint.textContent = td("dataExportHint");
-      dataArea.value = JSON.stringify(state, null, 2);
+      dataArea.value = getExportJson();
       dataArea.readOnly = true;
       btnDataApply.textContent = td("dismiss");
     } else {
@@ -1557,8 +1686,12 @@
       btnDataApply.textContent = td("apply");
     }
     dlgData.showModal();
-    dataArea.focus();
-    if(mode === "export") dataArea.select();
+    if(mode === "export"){
+      dataArea.focus();
+      dataArea.select();
+    } else {
+      btnLoadDataFile.focus();
+    }
   }
 
   function closeDataDialog(){
@@ -1701,6 +1834,27 @@
 
   btnExport.addEventListener("click", () => openDataDialog("export"));
   btnImport.addEventListener("click", () => openDataDialog("import"));
+  btnDownloadData.addEventListener("click", downloadExportFile);
+  btnLoadDataFile.addEventListener("click", () => dataFileInput.click());
+  dataFileInput.addEventListener("change", () => {
+    const file = dataFileInput.files && dataFileInput.files[0];
+    if(!file){
+      dlgDataFileHint.textContent = td("noFileChosen");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      dataArea.value = String(reader.result || "");
+      dlgDataFileHint.textContent = td("fileLoaded", file.name);
+      dataArea.focus();
+    });
+    reader.addEventListener("error", () => {
+      const msg = reader.error?.message || file.name;
+      dlgDataFileHint.textContent = td("fileReadFailed", msg);
+    });
+    reader.readAsText(file);
+  });
   btnDataApply.addEventListener("click", applyDataDialog);
   btnDataCancel.addEventListener("click", closeDataDialog);
   btnCloseDataDlg.addEventListener("click", closeDataDialog);
