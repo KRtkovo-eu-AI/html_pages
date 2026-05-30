@@ -1643,14 +1643,7 @@
   }
 
   function getExportFileName(){
-    const today = getTodayKey();
-    const tab = getActiveTab();
-    const safeName = String(tab?.name || "calendar")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]+/gi, "-")
-      .replace(/^-+|-+$/g, "") || "calendar";
-    return `everyday-calendar-${safeName}-${today}.json`;
+    return `everyday-calendar-${getTodayKey()}.json`;
   }
 
   function downloadExportFile(){
